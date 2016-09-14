@@ -8,15 +8,11 @@ import (
 )
 
 type generator struct {
-	i   int64
-	buf []byte
+	i int64
 }
 
-func NewGenerator(buf []byte) *generator {
-	if buf == nil {
-		buf = []byte{}
-	}
-	return &generator{buf: buf}
+func NewGenerator() *generator {
+	return &generator{}
 }
 
 func (g *generator) WriteTo(w io.Writer) (int64, error) {
