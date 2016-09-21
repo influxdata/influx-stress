@@ -9,6 +9,8 @@ type Point interface {
 	Series() []byte
 	Fields() []Field
 	Time() *Timestamp
+	SetTime(time.Time)
+	Update()
 }
 
 func WritePoint(w io.Writer, p Point) (err error) {
@@ -74,7 +76,9 @@ func NewPoint() *point {
 }
 
 func (p *point) Update() {
-	p.time.Time = time.Now()
+}
+
+func (p *point) SetTime(t time.Time) {
 }
 
 func (p *point) Series() []byte {

@@ -13,6 +13,10 @@ const (
 	DefaultRetentionPolicy = "autogen"
 )
 
+type Client interface {
+	Send([]byte) (int64, int, error)
+}
+
 type client struct {
 	url []byte
 }
