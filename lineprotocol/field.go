@@ -3,6 +3,7 @@ package lineprotocol
 import (
 	"io"
 	"strconv"
+	"sync/atomic"
 )
 
 var equalSign = byte('=')
@@ -30,7 +31,7 @@ func (i *Int) WriteTo(w io.Writer) (int64, error) {
 	// plus 1 for the leading =, plus 1 for the trailing i required for ints.
 	buf := make([]byte, 0, 21)
 	buf = append(buf, equalSign)
-	buf = strconv.AppendInt(buf, i.Value, 10)
+	buf = strconv.AppendInt(buf, atomic.LoadInt64(&i.Value), 10)
 	buf = append(buf, 'i')
 
 	m, err := w.Write(buf)
