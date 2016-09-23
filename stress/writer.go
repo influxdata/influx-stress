@@ -29,11 +29,9 @@ func Write(pts []lineprotocol.Point, c write.Client, cfg WriteConfig) (int, time
 	start := time.Now()
 	buf := bytes.NewBuffer(nil)
 	pointCount := 0
-	var t time.Time
+	t := time.Now()
 
 	for {
-		t = <-cfg.Tick
-
 		if t.After(cfg.Deadline) {
 			return pointCount, time.Since(start)
 		}
@@ -44,6 +42,7 @@ func Write(pts []lineprotocol.Point, c write.Client, cfg WriteConfig) (int, time
 			lineprotocol.WritePoint(buf, pt)
 			if pointCount%cfg.BatchSize == 0 {
 				sendBatch(c, buf, cfg.Results)
+				t = <-cfg.Tick
 			}
 			pt.Update()
 		}
@@ -56,7 +55,6 @@ func Write(pts []lineprotocol.Point, c write.Client, cfg WriteConfig) (int, time
 }
 
 func sendBatch(c write.Client, buf *bytes.Buffer, ch chan<- WriteResult) {
-	// Do something with the results of Send here
 	lat, status, err := c.Send(buf.Bytes())
 	buf.Reset()
 	select {
