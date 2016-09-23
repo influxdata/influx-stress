@@ -16,8 +16,8 @@ const (
 )
 
 type Timestamp struct {
-	Time      time.Time
 	precision Precision
+	ptr       unsafe.Pointer
 }
 
 func NewTimestamp(p Precision) *Timestamp {
@@ -26,9 +26,17 @@ func NewTimestamp(p Precision) *Timestamp {
 	}
 }
 
+func (t *Timestamp) TimePtr() *unsafe.Pointer {
+	return &t.ptr
+}
+
+func (t *Timestamp) SetTime(ts *time.Time) {
+	tsPtr := unsafe.Pointer(ts)
+	atomic.StorePointer(&t.ptr, tsPtr)
+}
+
 func (t *Timestamp) WriteTo(w io.Writer) (int64, error) {
-	unsafeTime := unsafe.Pointer(&t.Time)
-	tsPtr := atomic.LoadPointer(&unsafeTime)
+	tsPtr := atomic.LoadPointer(&t.ptr)
 
 	tsTime := *(*time.Time)(tsPtr)
 	ts := tsTime.UnixNano()
