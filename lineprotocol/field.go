@@ -53,6 +53,7 @@ func (f *Float) WriteTo(w io.Writer) (int64, error) {
 	// Taking a total guess here at what size a float might fit in
 	buf := make([]byte, 0, 32)
 	buf = append(buf, equalSign)
+	// There will be a data race here with *point.Update for floats
 	buf = strconv.AppendFloat(buf, f.Value, 'f', -1, 64)
 
 	m, err := w.Write(buf)

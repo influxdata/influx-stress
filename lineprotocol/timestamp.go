@@ -3,7 +3,9 @@ package lineprotocol
 import (
 	"io"
 	"strconv"
+	"sync/atomic"
 	"time"
+	"unsafe"
 )
 
 type Precision int
@@ -25,11 +27,14 @@ func NewTimestamp(p Precision) *Timestamp {
 }
 
 func (t *Timestamp) WriteTo(w io.Writer) (int64, error) {
-	// Race here with point SetTime
-	ts := t.Time.UnixNano()
+	unsafeTime := unsafe.Pointer(&t.Time)
+	tsPtr := atomic.LoadPointer(&unsafeTime)
+
+	tsTime := *(*time.Time)(tsPtr)
+	ts := tsTime.UnixNano()
 
 	if t.precision == Second {
-		ts = t.Time.Unix()
+		ts = tsTime.Unix()
 	}
 
 	// Max int64 fits in 19 base-10 digits;
