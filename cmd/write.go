@@ -23,7 +23,7 @@ var (
 )
 
 var writeCmd = &cobra.Command{
-	Use:   "write",
+	Use:   "write SERIES FIELDS",
 	Short: "Write data", // better descriiption
 	Long:  "",
 	Run:   writeRun,

@@ -25,6 +25,7 @@ func NewTimestamp(p Precision) *Timestamp {
 }
 
 func (t *Timestamp) WriteTo(w io.Writer) (int64, error) {
+	// Race here with point SetTime
 	ts := t.Time.UnixNano()
 
 	if t.precision == Second {
