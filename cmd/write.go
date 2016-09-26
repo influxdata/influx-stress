@@ -42,13 +42,7 @@ func writeRun(cmd *cobra.Command, args []string) {
 
 	c := write.NewClient(host, db, rp, precision)
 
-	pts := []lineprotocol.Point{}
-	series := point.GenerateSeriesKeys(args[0], seriesN)
-	ints, floats := point.GenerateFieldSet(args[1])
-	for _, seriesKey := range series {
-		p := point.New(seriesKey, ints, floats, lineprotocol.Nanosecond)
-		pts = append(pts, p)
-	}
+	pts := point.NewPoints(args[0], args[1], seriesN, lineprotocol.Nanosecond)
 
 	concurrency := pps / batchSize
 	var wg sync.WaitGroup

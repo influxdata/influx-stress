@@ -52,7 +52,7 @@ func tagCardinalityPartition(numTags int, factors map[int]int) []int {
 	return buckets
 }
 
-func GenerateSeriesKeys(tmplt string, card int) [][]byte {
+func generateSeriesKeys(tmplt string, card int) [][]byte {
 	fmtTmplt, numTags := formatTemplate(tmplt)
 	tagCardinalities := tagCardinalityPartition(numTags, primeFactorization(card))
 

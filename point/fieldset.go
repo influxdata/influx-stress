@@ -3,7 +3,7 @@ package point
 import "strings"
 
 // TODO: add correct error handling/panic when appropriate
-func GenerateFieldSet(s string) ([]string, []string) {
+func generateFieldSet(s string) ([]string, []string) {
 	ints := []string{}
 	floats := []string{}
 

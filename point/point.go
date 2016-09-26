@@ -65,3 +65,15 @@ func (p *point) Update() {
 		f.Value += 1.0
 	}
 }
+
+func NewPoints(seriesKey, fields string, seriesN int, pc lineprotocol.Precision) []lineprotocol.Point {
+	pts := []lineprotocol.Point{}
+	series := generateSeriesKeys(seriesKey, seriesN)
+	ints, floats := generateFieldSet(fields)
+	for _, sk := range series {
+		p := New(sk, ints, floats, pc)
+		pts = append(pts, p)
+	}
+
+	return pts
+}
