@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"math"
 	"net/http"
-	"os"
 	"sync"
 	"time"
 
@@ -20,6 +19,8 @@ var (
 	seriesN, pointsN, batchSize, pps int
 	runtime                          time.Duration
 	fast                             bool
+	defaultSeriesKey                 string = "ctr,some=tag"
+	defaultFieldStr                  string = "n=0i"
 )
 
 var writeCmd = &cobra.Command{
@@ -30,11 +31,13 @@ var writeCmd = &cobra.Command{
 }
 
 func writeRun(cmd *cobra.Command, args []string) {
-	if len(args) != 2 {
-		fmt.Println("Example point in line protocol must be specified")
-		_ = cmd.Usage()
-		os.Exit(1)
-		return
+	seriesKey := defaultSeriesKey
+	fieldStr := defaultFieldStr
+	if len(args) >= 1 {
+		seriesKey = args[0]
+	}
+	if len(args) == 2 {
+		fieldStr = args[1]
 	}
 
 	// create databse
@@ -42,7 +45,7 @@ func writeRun(cmd *cobra.Command, args []string) {
 
 	c := write.NewClient(host, db, rp, precision)
 
-	pts := point.NewPoints(args[0], args[1], seriesN, lineprotocol.Nanosecond)
+	pts := point.NewPoints(seriesKey, fieldStr, seriesN, lineprotocol.Nanosecond)
 
 	concurrency := pps / batchSize
 	var wg sync.WaitGroup
