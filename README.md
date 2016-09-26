@@ -1,11 +1,28 @@
 # Stress tool
 
-```bash
-$ influx-stress write -h
-Write data
+## Top Level Command
+```
+Create artificial load on an InfluxDB instance
 
 Usage:
-  influx-stress write SERIES FIELDS [flags]
+  influx-stress [command]
+
+  Available Commands:
+    insert      Insert data into InfluxDB
+
+    Flags:
+      -h, --help   help for influx-stress
+
+      Use "influx-stress [command] --help" for more information about a command.
+```
+
+## Insert Subcommand
+```bash
+$ influx-stress insert -h
+Insert data into InfluxDB
+
+Usage:
+  influx-stress insert SERIES FIELDS [flags]
 
 Flags:
   -b, --batch-size int     number of points in a batch (default 10000)
@@ -24,30 +41,30 @@ Flags:
 
 Runs forever
 ```bash
-$ influx-stress write
+$ influx-stress insert
 ```
 
 Runs forever writing as fast as possible
 ```bash
-$ influx-stress write -f
+$ influx-stress insert -f
 ```
 
 Runs for 1 minute writing as fast as possible
 ```bash
-$ influx-stress write -r 1m -f
+$ influx-stress insert -r 1m -f
 ```
 
 Writing an example series key
 ```bash
-$ influx-stress write cpu,host=server,location=us-west,id=myid
+$ influx-stress insert cpu,host=server,location=us-west,id=myid
 ```
 
 Writing an example series key with 20,000 series
 ```bash
-$ influx-stress write -s 20000 cpu,host=server,location=us-west,id=myid
+$ influx-stress insert -s 20000 cpu,host=server,location=us-west,id=myid
 ```
 
 Writing an example point
 ```bash
-$ influx-stress write cpu,host=server,location=us-west,id=myid busy=100,idle=10,random=5i
+$ influx-stress insert cpu,host=server,location=us-west,id=myid busy=100,idle=10,random=5i
 ```

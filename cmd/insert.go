@@ -23,14 +23,14 @@ var (
 	defaultFieldStr                  string = "n=0i"
 )
 
-var writeCmd = &cobra.Command{
-	Use:   "write SERIES FIELDS",
-	Short: "Write data", // better descriiption
+var insertCmd = &cobra.Command{
+	Use:   "insert SERIES FIELDS",
+	Short: "Insert data into InfluxDB", // better descriiption
 	Long:  "",
-	Run:   writeRun,
+	Run:   insertRun,
 }
 
-func writeRun(cmd *cobra.Command, args []string) {
+func insertRun(cmd *cobra.Command, args []string) {
 	seriesKey := defaultSeriesKey
 	fieldStr := defaultFieldStr
 	if len(args) >= 1 {
@@ -84,16 +84,16 @@ func writeRun(cmd *cobra.Command, args []string) {
 }
 
 func init() {
-	RootCmd.AddCommand(writeCmd)
+	RootCmd.AddCommand(insertCmd)
 
-	writeCmd.Flags().StringVarP(&host, "host", "", "http://localhost:8086", "Address of InfluxDB instance")
-	writeCmd.Flags().StringVarP(&db, "db", "", "stress", "Database that will be written to")
-	writeCmd.Flags().StringVarP(&rp, "rp", "", "", "Retention Policy that will be written to")
-	writeCmd.Flags().StringVarP(&precision, "precision", "p", "n", "Resolution of data being written")
-	writeCmd.Flags().IntVarP(&seriesN, "series", "s", 100000, "number of series that will be written")
-	writeCmd.Flags().IntVarP(&pointsN, "points", "n", int(math.MaxInt64), "number of points that will be written")
-	writeCmd.Flags().IntVarP(&batchSize, "batch-size", "b", 10000, "number of points in a batch")
-	writeCmd.Flags().IntVarP(&pps, "pps", "", 200000, "Points Per Second")
-	writeCmd.Flags().DurationVarP(&runtime, "runtime", "r", time.Duration(math.MaxInt64), "Total time that the test will run")
-	writeCmd.Flags().BoolVarP(&fast, "fast", "f", false, "Run as fast as possible")
+	insertCmd.Flags().StringVarP(&host, "host", "", "http://localhost:8086", "Address of InfluxDB instance")
+	insertCmd.Flags().StringVarP(&db, "db", "", "stress", "Database that will be written to")
+	insertCmd.Flags().StringVarP(&rp, "rp", "", "", "Retention Policy that will be written to")
+	insertCmd.Flags().StringVarP(&precision, "precision", "p", "n", "Resolution of data being written")
+	insertCmd.Flags().IntVarP(&seriesN, "series", "s", 100000, "number of series that will be written")
+	insertCmd.Flags().IntVarP(&pointsN, "points", "n", int(math.MaxInt64), "number of points that will be written")
+	insertCmd.Flags().IntVarP(&batchSize, "batch-size", "b", 10000, "number of points in a batch")
+	insertCmd.Flags().IntVarP(&pps, "pps", "", 200000, "Points Per Second")
+	insertCmd.Flags().DurationVarP(&runtime, "runtime", "r", time.Duration(math.MaxInt64), "Total time that the test will run")
+	insertCmd.Flags().BoolVarP(&fast, "fast", "f", false, "Run as fast as possible")
 }
