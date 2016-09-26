@@ -43,8 +43,10 @@ func writeRun(cmd *cobra.Command, args []string) {
 	c := write.NewClient(host, db, rp, precision)
 
 	pts := []lineprotocol.Point{}
-	for i := 0; i < seriesN; i++ {
-		p := point.New([]byte(fmt.Sprintf("cpu,host=server%v", i)), []string{"n"}, nil, lineprotocol.Nanosecond)
+	series := point.GenerateSeriesKeys(args[0], seriesN)
+	ints, floats := point.GenerateFieldSet(args[1])
+	for _, seriesKey := range series {
+		p := point.New(seriesKey, ints, floats, lineprotocol.Nanosecond)
 		pts = append(pts, p)
 	}
 
