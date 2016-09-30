@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math"
 	"net/http"
+	"os"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -53,6 +54,9 @@ func insertRun(cmd *cobra.Command, args []string) {
 	pts := point.NewPoints(seriesKey, fieldStr, seriesN, lineprotocol.Nanosecond)
 
 	concurrency := pps / batchSize
+
+	sink := newResultSink(int(concurrency))
+
 	var wg sync.WaitGroup
 	wg.Add(int(concurrency))
 
@@ -72,7 +76,7 @@ func insertRun(cmd *cobra.Command, args []string) {
 				MaxPoints: pointsN / concurrency, // divide by concurreny
 				Deadline:  time.Now().Add(runtime),
 				Tick:      tick,
-				Results:   make(chan stress.WriteResult, 0), // make result sync
+				Results:   sink.Chan,
 			}
 
 			// Ignore duration from a single call to Write.
@@ -84,6 +88,8 @@ func insertRun(cmd *cobra.Command, args []string) {
 	}
 
 	wg.Wait()
+	sink.Close()
+
 	totalTime := time.Since(start)
 	fmt.Printf("Write Throughput: %v\n", int(float64(totalWritten)/totalTime.Seconds()))
 }
@@ -101,4 +107,42 @@ func init() {
 	insertCmd.Flags().Uint64VarP(&pps, "pps", "", 200000, "Points Per Second")
 	insertCmd.Flags().DurationVarP(&runtime, "runtime", "r", time.Duration(math.MaxInt64), "Total time that the test will run")
 	insertCmd.Flags().BoolVarP(&fast, "fast", "f", false, "Run as fast as possible")
+}
+
+type resultSink struct {
+	Chan chan stress.WriteResult
+
+	wg sync.WaitGroup
+}
+
+func newResultSink(nWriters int) *resultSink {
+	s := &resultSink{
+		Chan: make(chan stress.WriteResult, 8*nWriters),
+	}
+
+	s.wg.Add(1)
+	go s.printErrors()
+
+	return s
+}
+
+func (s *resultSink) Close() {
+	close(s.Chan)
+	s.wg.Wait()
+}
+
+func (s *resultSink) printErrors() {
+	defer s.wg.Done()
+
+	const timeFormat = "[2006-01-02 15:04:05]"
+	for r := range s.Chan {
+		if r.Err != nil {
+			fmt.Fprintln(os.Stderr, time.Now().Format(timeFormat), "Error sending write:", r.Err.Error())
+			continue
+		}
+
+		if r.StatusCode != 204 {
+			fmt.Fprintln(os.Stderr, time.Now().Format(timeFormat), "Unexpected write status:", r.StatusCode)
+		}
+	}
 }
