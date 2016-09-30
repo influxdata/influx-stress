@@ -1,6 +1,9 @@
 package write
 
 import (
+	"fmt"
+	"io/ioutil"
+	"net/http"
 	"net/url"
 	"time"
 
@@ -22,15 +25,45 @@ type ClientConfig struct {
 }
 
 type Client interface {
+	Create(string) error
 	Send([]byte) (int64, int, error)
 }
 
 type client struct {
 	url []byte
+
+	cfg ClientConfig
 }
 
 func NewClient(cfg ClientConfig) Client {
-	return &client{url: []byte(writeURLFromConfig(cfg))}
+	return &client{
+		url: []byte(writeURLFromConfig(cfg)),
+		cfg: cfg,
+	}
+}
+
+func (c *client) Create(command string) error {
+	if command == "" {
+		command = "CREATE DATABASE " + c.cfg.Database
+	}
+
+	vals := url.Values{}
+	vals.Set("q", command)
+	resp, err := http.PostForm(c.cfg.BaseURL+"/query", vals)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		body, _ := ioutil.ReadAll(resp.Body)
+		return fmt.Errorf(
+			"Bad status code during Create(%s): %d, body: %s",
+			command, resp.StatusCode, string(body),
+		)
+	}
+
+	return nil
 }
 
 func (c *client) Send(b []byte) (latNs int64, statusCode int, err error) {

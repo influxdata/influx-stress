@@ -3,7 +3,6 @@ package cmd
 import (
 	"fmt"
 	"math"
-	"net/http"
 	"os"
 	"sync"
 	"sync/atomic"
@@ -18,6 +17,7 @@ import (
 
 var (
 	host, db, rp, precision, consistency string
+	createCommand                        string
 	seriesN                              int
 	batchSize, pointsN, pps              uint64
 	runtime                              time.Duration
@@ -58,11 +58,8 @@ func insertRun(cmd *cobra.Command, args []string) {
 		}
 		fmt.Printf("Using %d concurrent writer(s)\n", concurrency)
 
-		fmt.Printf("Running until ~%d points sent or until %v has elapsed\n", pointsN, runtime)
+		fmt.Printf("Running until ~%d points sent or until ~%v has elapsed\n", pointsN, runtime)
 	}
-
-	// create databse
-	http.Get(fmt.Sprintf("%v/query?q=create+database+%v", host, db))
 
 	c := write.NewClient(write.ClientConfig{
 		BaseURL:         host,
@@ -71,6 +68,13 @@ func insertRun(cmd *cobra.Command, args []string) {
 		Precision:       precision,
 		Consistency:     consistency,
 	})
+
+	if err := c.Create(createCommand); err != nil {
+		fmt.Fprintln(os.Stderr, "Failed to create database:", err.Error())
+		fmt.Fprintln(os.Stderr, "Aborting.")
+		os.Exit(1)
+		return
+	}
 
 	pts := point.NewPoints(seriesKey, fieldStr, seriesN, lineprotocol.Nanosecond)
 
@@ -133,6 +137,7 @@ func init() {
 	insertCmd.Flags().DurationVarP(&runtime, "runtime", "r", time.Duration(math.MaxInt64), "Total time that the test will run")
 	insertCmd.Flags().BoolVarP(&fast, "fast", "f", false, "Run as fast as possible")
 	insertCmd.Flags().BoolVarP(&quiet, "quiet", "q", false, "Only print the write throughput")
+	insertCmd.Flags().StringVar(&createCommand, "create", "", "Use a custom create database command")
 }
 
 type resultSink struct {
