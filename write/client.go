@@ -1,7 +1,6 @@
 package write
 
 import (
-	"fmt"
 	"net/url"
 	"time"
 
@@ -13,6 +12,15 @@ const (
 	DefaultRetentionPolicy = "autogen"
 )
 
+type ClientConfig struct {
+	BaseURL string
+
+	Database        string
+	RetentionPolicy string
+	Precision       string
+	Consistency     string
+}
+
 type Client interface {
 	Send([]byte) (int64, int, error)
 }
@@ -21,12 +29,8 @@ type client struct {
 	url []byte
 }
 
-// add consistency and config struct
-func NewClient(influxURL, db, rp, p string) *client {
-	tmpltURL := "%s/write?db=%s&rp=%s&precision=%s"
-	u := fmt.Sprintf(tmpltURL,
-		influxURL, url.QueryEscape(db), url.QueryEscape(rp), url.QueryEscape(p))
-	return &client{url: []byte(u)}
+func NewClient(cfg ClientConfig) Client {
+	return &client{url: []byte(writeURLFromConfig(cfg))}
 }
 
 func (c *client) Send(b []byte) (latNs int64, statusCode int, err error) {
@@ -47,4 +51,20 @@ func (c *client) Send(b []byte) (latNs int64, statusCode int, err error) {
 	fasthttp.ReleaseRequest(req)
 
 	return
+}
+
+func writeURLFromConfig(cfg ClientConfig) string {
+	params := url.Values{}
+	params.Set("db", cfg.Database)
+	if cfg.RetentionPolicy != "" {
+		params.Set("rp", cfg.RetentionPolicy)
+	}
+	if cfg.Precision != "n" && cfg.Precision != "" {
+		params.Set("precision", cfg.Precision)
+	}
+	if cfg.Consistency != "one" && cfg.Consistency != "" {
+		params.Set("consistency", cfg.Consistency)
+	}
+
+	return cfg.BaseURL + "/write?" + params.Encode()
 }

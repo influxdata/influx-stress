@@ -17,11 +17,11 @@ import (
 )
 
 var (
-	host, db, rp, precision string
-	seriesN                 int
-	batchSize, pointsN, pps uint64
-	runtime                 time.Duration
-	fast, quiet             bool
+	host, db, rp, precision, consistency string
+	seriesN                              int
+	batchSize, pointsN, pps              uint64
+	runtime                              time.Duration
+	fast, quiet                          bool
 )
 
 const (
@@ -64,7 +64,13 @@ func insertRun(cmd *cobra.Command, args []string) {
 	// create databse
 	http.Get(fmt.Sprintf("%v/query?q=create+database+%v", host, db))
 
-	c := write.NewClient(host, db, rp, precision)
+	c := write.NewClient(write.ClientConfig{
+		BaseURL:         host,
+		Database:        db,
+		RetentionPolicy: rp,
+		Precision:       precision,
+		Consistency:     consistency,
+	})
 
 	pts := point.NewPoints(seriesKey, fieldStr, seriesN, lineprotocol.Nanosecond)
 
@@ -119,6 +125,7 @@ func init() {
 	insertCmd.Flags().StringVarP(&db, "db", "", "stress", "Database that will be written to")
 	insertCmd.Flags().StringVarP(&rp, "rp", "", "", "Retention Policy that will be written to")
 	insertCmd.Flags().StringVarP(&precision, "precision", "p", "n", "Resolution of data being written")
+	insertCmd.Flags().StringVarP(&consistency, "consistency", "c", "one", "Write consistency (only applicable to clusters)")
 	insertCmd.Flags().IntVarP(&seriesN, "series", "s", 100000, "number of series that will be written")
 	insertCmd.Flags().Uint64VarP(&pointsN, "points", "n", math.MaxUint64, "number of points that will be written")
 	insertCmd.Flags().Uint64VarP(&batchSize, "batch-size", "b", 10000, "number of points in a batch")
