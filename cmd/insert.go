@@ -21,7 +21,7 @@ var (
 	seriesN                 int
 	batchSize, pointsN, pps uint64
 	runtime                 time.Duration
-	fast                    bool
+	fast, quiet             bool
 )
 
 const (
@@ -46,14 +46,27 @@ func insertRun(cmd *cobra.Command, args []string) {
 		fieldStr = args[1]
 	}
 
+	concurrency := pps / batchSize
+	if !quiet {
+		fmt.Printf("Using point template: %s %s <timestamp>\n", seriesKey, fieldStr)
+		fmt.Printf("Using batch size of %d line(s)\n", batchSize)
+		fmt.Printf("Spreading writes across %d series\n", seriesN)
+		if fast {
+			fmt.Println("Output is unthrottled")
+		} else {
+			fmt.Printf("Throttling output to ~%d points/sec\n", pps)
+		}
+		fmt.Printf("Using %d concurrent writer(s)\n", concurrency)
+
+		fmt.Printf("Running until ~%d points sent or until %v has elapsed\n", pointsN, runtime)
+	}
+
 	// create databse
 	http.Get(fmt.Sprintf("%v/query?q=create+database+%v", host, db))
 
 	c := write.NewClient(host, db, rp, precision)
 
 	pts := point.NewPoints(seriesKey, fieldStr, seriesN, lineprotocol.Nanosecond)
-
-	concurrency := pps / batchSize
 
 	sink := newResultSink(int(concurrency))
 
@@ -91,7 +104,12 @@ func insertRun(cmd *cobra.Command, args []string) {
 	totalTime := time.Since(start)
 
 	sink.Close()
-	fmt.Printf("Write Throughput: %v\n", int(float64(totalWritten)/totalTime.Seconds()))
+	throughput := int(float64(totalWritten) / totalTime.Seconds())
+	if quiet {
+		fmt.Println(throughput)
+	} else {
+		fmt.Println("Write Throughput:", throughput)
+	}
 }
 
 func init() {
@@ -107,6 +125,7 @@ func init() {
 	insertCmd.Flags().Uint64VarP(&pps, "pps", "", 200000, "Points Per Second")
 	insertCmd.Flags().DurationVarP(&runtime, "runtime", "r", time.Duration(math.MaxInt64), "Total time that the test will run")
 	insertCmd.Flags().BoolVarP(&fast, "fast", "f", false, "Run as fast as possible")
+	insertCmd.Flags().BoolVarP(&quiet, "quiet", "q", false, "Only print the write throughput")
 }
 
 type resultSink struct {
