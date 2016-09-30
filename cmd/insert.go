@@ -88,9 +88,9 @@ func insertRun(cmd *cobra.Command, args []string) {
 	}
 
 	wg.Wait()
-	sink.Close()
-
 	totalTime := time.Since(start)
+
+	sink.Close()
 	fmt.Printf("Write Throughput: %v\n", int(float64(totalWritten)/totalTime.Seconds()))
 }
 
