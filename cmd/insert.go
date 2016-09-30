@@ -18,7 +18,7 @@ import (
 var (
 	host, db, rp, precision, consistency string
 	createCommand                        string
-	seriesN                              int
+	seriesN, gzip                        int
 	batchSize, pointsN, pps              uint64
 	runtime                              time.Duration
 	fast, quiet                          bool
@@ -67,6 +67,7 @@ func insertRun(cmd *cobra.Command, args []string) {
 		RetentionPolicy: rp,
 		Precision:       precision,
 		Consistency:     consistency,
+		Gzip:            gzip != 0,
 	})
 
 	if err := c.Create(createCommand); err != nil {
@@ -97,6 +98,7 @@ func insertRun(cmd *cobra.Command, args []string) {
 			cfg := stress.WriteConfig{
 				BatchSize: batchSize,
 				MaxPoints: pointsN / concurrency, // divide by concurreny
+				GzipLevel: gzip,
 				Deadline:  time.Now().Add(runtime),
 				Tick:      tick,
 				Results:   sink.Chan,
@@ -138,6 +140,7 @@ func init() {
 	insertCmd.Flags().BoolVarP(&fast, "fast", "f", false, "Run as fast as possible")
 	insertCmd.Flags().BoolVarP(&quiet, "quiet", "q", false, "Only print the write throughput")
 	insertCmd.Flags().StringVar(&createCommand, "create", "", "Use a custom create database command")
+	insertCmd.Flags().IntVar(&gzip, "gzip", 0, "If non-zero, gzip write bodies with given compression level. 1=best speed, 9=best compression, -1=default.")
 }
 
 type resultSink struct {
