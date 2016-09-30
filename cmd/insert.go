@@ -5,6 +5,7 @@ import (
 	"math"
 	"net/http"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/influxdata/influx-stress/lineprotocol"
@@ -15,12 +16,16 @@ import (
 )
 
 var (
-	host, db, rp, precision          string
-	seriesN, pointsN, batchSize, pps int
-	runtime                          time.Duration
-	fast                             bool
-	defaultSeriesKey                 string = "ctr,some=tag"
-	defaultFieldStr                  string = "n=0i"
+	host, db, rp, precision string
+	seriesN                 int
+	batchSize, pointsN, pps uint64
+	runtime                 time.Duration
+	fast                    bool
+)
+
+const (
+	defaultSeriesKey string = "ctr,some=tag"
+	defaultFieldStr  string = "n=0i"
 )
 
 var insertCmd = &cobra.Command{
@@ -49,10 +54,12 @@ func insertRun(cmd *cobra.Command, args []string) {
 
 	concurrency := pps / batchSize
 	var wg sync.WaitGroup
-	wg.Add(concurrency)
-	var totalWritten int
-	var totalTime time.Duration
-	for i := 0; i < concurrency; i++ {
+	wg.Add(int(concurrency))
+
+	var totalWritten uint64
+
+	start := time.Now()
+	for i := uint64(0); i < concurrency; i++ {
 		go func() {
 			tick := time.Tick(time.Second)
 
@@ -68,19 +75,17 @@ func insertRun(cmd *cobra.Command, args []string) {
 				Results:   make(chan stress.WriteResult, 0), // make result sync
 			}
 
-			pointsWritten, duration := stress.Write(pts, c, cfg)
-			totalWritten += pointsWritten
+			// Ignore duration from a single call to Write.
+			pointsWritten, _ := stress.Write(pts, c, cfg)
+			atomic.AddUint64(&totalWritten, pointsWritten)
 
-			if totalTime < duration {
-				totalTime = duration
-			}
 			wg.Done()
 		}()
 	}
 
 	wg.Wait()
+	totalTime := time.Since(start)
 	fmt.Printf("Write Throughput: %v\n", int(float64(totalWritten)/totalTime.Seconds()))
-
 }
 
 func init() {
@@ -91,9 +96,9 @@ func init() {
 	insertCmd.Flags().StringVarP(&rp, "rp", "", "", "Retention Policy that will be written to")
 	insertCmd.Flags().StringVarP(&precision, "precision", "p", "n", "Resolution of data being written")
 	insertCmd.Flags().IntVarP(&seriesN, "series", "s", 100000, "number of series that will be written")
-	insertCmd.Flags().IntVarP(&pointsN, "points", "n", int(math.MaxInt64), "number of points that will be written")
-	insertCmd.Flags().IntVarP(&batchSize, "batch-size", "b", 10000, "number of points in a batch")
-	insertCmd.Flags().IntVarP(&pps, "pps", "", 200000, "Points Per Second")
+	insertCmd.Flags().Uint64VarP(&pointsN, "points", "n", math.MaxUint64, "number of points that will be written")
+	insertCmd.Flags().Uint64VarP(&batchSize, "batch-size", "b", 10000, "number of points in a batch")
+	insertCmd.Flags().Uint64VarP(&pps, "pps", "", 200000, "Points Per Second")
 	insertCmd.Flags().DurationVarP(&runtime, "runtime", "r", time.Duration(math.MaxInt64), "Total time that the test will run")
 	insertCmd.Flags().BoolVarP(&fast, "fast", "f", false, "Run as fast as possible")
 }

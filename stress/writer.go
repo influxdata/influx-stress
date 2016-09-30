@@ -15,20 +15,21 @@ type WriteResult struct {
 }
 
 type WriteConfig struct {
-	BatchSize int
-	MaxPoints int
+	BatchSize uint64
+	MaxPoints uint64
 	Deadline  time.Time
 	Tick      <-chan time.Time
 	Results   chan<- WriteResult
 }
 
-func Write(pts []lineprotocol.Point, c write.Client, cfg WriteConfig) (int, time.Duration) {
+func Write(pts []lineprotocol.Point, c write.Client, cfg WriteConfig) (uint64, time.Duration) {
 	if cfg.Results == nil {
 		panic("Results Channel on WriteConfig cannot be nil")
 	}
+	var pointCount uint64
+
 	start := time.Now()
 	buf := bytes.NewBuffer(nil)
-	pointCount := 0
 	t := time.Now()
 
 	for {
@@ -51,7 +52,6 @@ func Write(pts []lineprotocol.Point, c write.Client, cfg WriteConfig) (int, time
 			return pointCount, time.Since(start)
 		}
 	}
-
 }
 
 func sendBatch(c write.Client, buf *bytes.Buffer, ch chan<- WriteResult) {
