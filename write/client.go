@@ -5,6 +5,8 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/url"
+	"os"
+	"sync"
 	"time"
 
 	"github.com/valyala/fasthttp"
@@ -28,7 +30,9 @@ type ClientConfig struct {
 
 type Client interface {
 	Create(string) error
-	Send([]byte) (int64, int, error)
+	Send([]byte) (latNs int64, statusCode int, err error)
+
+	Close() error
 }
 
 type client struct {
@@ -89,6 +93,77 @@ func (c *client) Send(b []byte) (latNs int64, statusCode int, err error) {
 	fasthttp.ReleaseRequest(req)
 
 	return
+}
+
+func (c *client) Close() error {
+	// Nothing to do.
+	return nil
+}
+
+type fileClient struct {
+	database string
+
+	mu    sync.Mutex
+	f     *os.File
+	batch uint
+}
+
+func NewFileClient(path string, cfg ClientConfig) (Client, error) {
+	c := &fileClient{}
+
+	var err error
+	c.f, err = os.Create(path)
+	if err != nil {
+		return nil, err
+	}
+
+	if _, err := c.f.WriteString("# " + writeURLFromConfig(cfg) + "\n"); err != nil {
+		return nil, err
+	}
+
+	return c, nil
+}
+
+func (c *fileClient) Create(command string) error {
+	if command == "" {
+		command = "CREATE DATABASE " + c.database
+	}
+
+	c.mu.Lock()
+	_, err := fmt.Fprintf(c.f, "# create: %s\n\n", command)
+	c.mu.Unlock()
+	return err
+}
+
+func (c *fileClient) Send(b []byte) (latNs int64, statusCode int, err error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	statusCode = -1
+	start := time.Now()
+	defer func() {
+		latNs = time.Since(start).Nanoseconds()
+	}()
+
+	c.batch++
+	if _, err = fmt.Fprintf(c.f, "# Batch %d:\n", c.batch); err != nil {
+		return
+	}
+
+	if _, err = c.f.Write(b); err != nil {
+		return
+	}
+
+	if _, err = c.f.Write([]byte{'\n'}); err != nil {
+		return
+	}
+
+	statusCode = 204
+	return
+}
+
+func (c *fileClient) Close() error {
+	return c.f.Close()
 }
 
 func writeURLFromConfig(cfg ClientConfig) string {

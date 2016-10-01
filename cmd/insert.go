@@ -17,7 +17,7 @@ import (
 
 var (
 	host, db, rp, precision, consistency string
-	createCommand                        string
+	createCommand, dump                  string
 	seriesN, gzip                        int
 	batchSize, pointsN, pps              uint64
 	runtime                              time.Duration
@@ -61,14 +61,7 @@ func insertRun(cmd *cobra.Command, args []string) {
 		fmt.Printf("Running until ~%d points sent or until ~%v has elapsed\n", pointsN, runtime)
 	}
 
-	c := write.NewClient(write.ClientConfig{
-		BaseURL:         host,
-		Database:        db,
-		RetentionPolicy: rp,
-		Precision:       precision,
-		Consistency:     consistency,
-		Gzip:            gzip != 0,
-	})
+	c := client()
 
 	if err := c.Create(createCommand); err != nil {
 		fmt.Fprintln(os.Stderr, "Failed to create database:", err.Error())
@@ -114,6 +107,9 @@ func insertRun(cmd *cobra.Command, args []string) {
 
 	wg.Wait()
 	totalTime := time.Since(start)
+	if err := c.Close(); err != nil {
+		fmt.Fprintf(os.Stderr, "Error closing client:", err.Error())
+	}
 
 	sink.Close()
 	throughput := int(float64(totalWritten) / totalTime.Seconds())
@@ -140,7 +136,31 @@ func init() {
 	insertCmd.Flags().BoolVarP(&fast, "fast", "f", false, "Run as fast as possible")
 	insertCmd.Flags().BoolVarP(&quiet, "quiet", "q", false, "Only print the write throughput")
 	insertCmd.Flags().StringVar(&createCommand, "create", "", "Use a custom create database command")
-	insertCmd.Flags().IntVar(&gzip, "gzip", 0, "If non-zero, gzip write bodies with given compression level. 1=best speed, 9=best compression, -1=default.")
+	insertCmd.Flags().IntVar(&gzip, "gzip", 0, "If non-zero, gzip write bodies with given compression level. 1=best speed, 9=best compression, -1=gzip default.")
+	insertCmd.Flags().StringVar(&dump, "dump", "", "Dump to given file instead of writing over HTTP")
+}
+
+func client() write.Client {
+	cfg := write.ClientConfig{
+		BaseURL:         host,
+		Database:        db,
+		RetentionPolicy: rp,
+		Precision:       precision,
+		Consistency:     consistency,
+		Gzip:            gzip != 0,
+	}
+
+	if dump != "" {
+		c, err := write.NewFileClient(dump, cfg)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "Error opening file:", err)
+			os.Exit(1)
+			return c
+		}
+
+		return c
+	}
+	return write.NewClient(cfg)
 }
 
 type resultSink struct {

@@ -53,9 +53,10 @@ func Write(pts []lineprotocol.Point, c write.Client, cfg WriteConfig) (uint64, t
 		w = gzw
 	}
 
+WRITE_BATCHES:
 	for {
 		if t.After(cfg.Deadline) {
-			return pointCount, time.Since(start)
+			break WRITE_BATCHES
 		}
 
 		for _, pt := range pts {
@@ -77,14 +78,19 @@ func Write(pts []lineprotocol.Point, c write.Client, cfg WriteConfig) (uint64, t
 				}
 
 				t = <-cfg.Tick
+				if t.After(cfg.Deadline) {
+					break WRITE_BATCHES
+				}
 			}
 			pt.Update()
 		}
 
 		if pointCount >= cfg.MaxPoints {
-			return pointCount, time.Since(start)
+			break WRITE_BATCHES
 		}
 	}
+
+	return pointCount, time.Since(start)
 }
 
 func sendBatch(c write.Client, buf *bytes.Buffer, ch chan<- WriteResult) {
