@@ -117,6 +117,7 @@ func insertRun(cmd *cobra.Command, args []string) {
 		fmt.Println(throughput)
 	} else {
 		fmt.Println("Write Throughput:", throughput)
+		fmt.Println("Points Written:", totalWritten)
 	}
 }
 
