@@ -59,6 +59,10 @@ WRITE_BATCHES:
 			break WRITE_BATCHES
 		}
 
+		if pointCount >= cfg.MaxPoints {
+			break
+		}
+
 		for _, pt := range pts {
 			pointCount++
 			pt.SetTime(t)
@@ -81,12 +85,13 @@ WRITE_BATCHES:
 				if t.After(cfg.Deadline) {
 					break WRITE_BATCHES
 				}
+
+				if pointCount >= cfg.MaxPoints {
+					break
+				}
+
 			}
 			pt.Update()
-		}
-
-		if pointCount >= cfg.MaxPoints {
-			break WRITE_BATCHES
 		}
 	}
 
