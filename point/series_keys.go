@@ -2,6 +2,7 @@ package point
 
 import (
 	"fmt"
+	"math"
 	"strings"
 )
 
@@ -35,18 +36,9 @@ func tagCardinalityPartition(numTags int, factors map[int]int) []int {
 	}
 
 	i := 0
-	for factor := range factors {
-		for {
-			i++
-			count := factors[factor]
-			if count == 0 {
-				i--
-				break
-			} else {
-				buckets[i%numTags] *= factor
-				factors[factor] = count - 1
-			}
-		}
+	for factor, power := range factors {
+		buckets[i%len(buckets)] *= int(math.Pow(float64(factor), float64(power)))
+		i++
 	}
 
 	return buckets
