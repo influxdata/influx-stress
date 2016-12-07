@@ -45,7 +45,7 @@ func TestTimestamp_WriteTo_Second(t *testing.T) {
 }
 
 func TestTimestamp_WriteTo_Nanosecond(t *testing.T) {
-	ts := lineprotocol.NewTimestamp(lineprotocol.Second)
+	ts := lineprotocol.NewTimestamp(lineprotocol.Nanosecond)
 	ts.SetTime(&testTime)
 
 	buf := bytes.NewBuffer(nil)
@@ -54,7 +54,7 @@ func TestTimestamp_WriteTo_Nanosecond(t *testing.T) {
 		return
 	}
 
-	exp := fmt.Sprintf("%v", testTime.Unix())
+	exp := fmt.Sprintf("%v", testTime.UnixNano())
 	got := string(buf.Bytes())
 
 	if got != exp {

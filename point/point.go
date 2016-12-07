@@ -11,10 +11,14 @@ import (
 type point struct {
 	seriesKey []byte
 
-	// TODO: Add reasoning for exporting Ints and Floats
-	// but not fields
+	// Note here that Ints and Floats are exported so they can be modified outside
+	// of the point struct
 	Ints   []*lineprotocol.Int
 	Floats []*lineprotocol.Float
+
+	// The fields slice should contain exactly Ints and Floats. Having this
+	// slice allows us to avoid iterating through Ints and Floats in the Fields
+	// function.
 	fields []lineprotocol.Field
 
 	time *lineprotocol.Timestamp

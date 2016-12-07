@@ -41,13 +41,9 @@ func (p *mockPoint) Time() *lineprotocol.Timestamp {
 	return ts
 }
 
-func (p *mockPoint) SetTime(time.Time) {
-	return
-}
+func (p *mockPoint) SetTime(time.Time) {}
 
-func (p *mockPoint) Update() {
-	return
-}
+func (p *mockPoint) Update() {}
 
 func TestWritePoint_MockPoint(t *testing.T) {
 	p := NewMockPoint()
