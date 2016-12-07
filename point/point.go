@@ -7,7 +7,7 @@ import (
 	"github.com/influxdata/influx-stress/lineprotocol"
 )
 
-// point implements the lineprotocol.Point interface.
+// The point struct implements the lineprotocol.Point interface.
 type point struct {
 	seriesKey []byte
 
@@ -48,31 +48,31 @@ func New(sk []byte, ints, floats []string, p lineprotocol.Precision) *point {
 	return e
 }
 
-// Series returns the series key for a point
+// Series returns the series key for a point.
 func (p *point) Series() []byte {
 	return p.seriesKey
 }
 
-// Fields returns the fields for a a point
+// Fields returns the fields for a a point.
 func (p *point) Fields() []lineprotocol.Field {
 	return p.fields
 }
 
-// Time returns the timestamps for a point
+// Time returns the timestamps for a point.
 func (p *point) Time() *lineprotocol.Timestamp {
 	return p.time
 }
 
-// SetTime set the t to be the timestamp for a point
+// SetTime set the t to be the timestamp for a point.
 func (p *point) SetTime(t time.Time) {
 	p.time.SetTime(&t)
 }
 
 // Update increments the value of all of the Int and Float
-// fields by 1
+// fields by 1.
 func (p *point) Update() {
 	for _, i := range p.Ints {
-		atomic.AddInt64(&i.Value, int64(1)) // maybe remove the go's
+		atomic.AddInt64(&i.Value, int64(1))
 	}
 
 	for _, f := range p.Floats {

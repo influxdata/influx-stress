@@ -9,10 +9,10 @@ import (
 var equalSign = byte('=')
 var comma = byte(',')
 
-// Field is an aliased io.WriterTo
+// Field is an aliased io.WriterTo.
 type Field io.WriterTo
 
-// Verify that *Int and *Float implement Field
+// Verify that *Int and *Float implement Field.
 var (
 	_ Field = &Int{}
 	_ Field = &Float{}
@@ -32,7 +32,7 @@ type Int struct {
 	Key   []byte
 }
 
-// WriteTo writes the field key value pair to an io.Writer
+// WriteTo writes the field key value pair to an io.Writer.
 // For example if i.Key = []byte("value") and i.Value = 1
 // then `value=1i` is written.
 func (i *Int) WriteTo(w io.Writer) (int64, error) {
@@ -41,7 +41,7 @@ func (i *Int) WriteTo(w io.Writer) (int64, error) {
 		return int64(n), err
 	}
 
-	// Max int64 fits in 19 base-10 digits;
+	// Max int64 fits in 19 base-10 digits,
 	// plus 1 for the leading =, plus 1 for the trailing i required for ints.
 	buf := make([]byte, 0, 21)
 	buf = append(buf, equalSign)

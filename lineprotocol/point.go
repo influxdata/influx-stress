@@ -5,18 +5,18 @@ import (
 	"time"
 )
 
-// Point defines values that will be written in line protocol
+// Point defines values that will be written in line protocol.
 type Point interface {
-	// byte slice representing the series key for a point
+	// Byte slice representing the series key for a point.
 	Series() []byte
 
-	// slice of Field (alais for io.WriterTo) interfaces
+	// Slice of Field (alais for io.WriterTo) interfaces.
 	Fields() []Field
 
 	Time() *Timestamp
 	SetTime(time.Time)
 
-	// update is intended to be used to mutate field values
+	// Update is intended to be used to mutate field values.
 	Update()
 }
 
