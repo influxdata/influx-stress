@@ -7,14 +7,24 @@ import (
 	"github.com/influxdata/influx-stress/lineprotocol"
 )
 
+// The point struct implements the lineprotocol.Point interface.
 type point struct {
 	seriesKey []byte
-	Ints      []*lineprotocol.Int
-	Floats    []*lineprotocol.Float
-	time      *lineprotocol.Timestamp
-	fields    []lineprotocol.Field
+
+	// Note here that Ints and Floats are exported so they can be modified outside
+	// of the point struct
+	Ints   []*lineprotocol.Int
+	Floats []*lineprotocol.Float
+
+	// The fields slice should contain exactly Ints and Floats. Having this
+	// slice allows us to avoid iterating through Ints and Floats in the Fields
+	// function.
+	fields []lineprotocol.Field
+
+	time *lineprotocol.Timestamp
 }
 
+// New returns a new point without setting the time field.
 func New(sk []byte, ints, floats []string, p lineprotocol.Precision) *point {
 	fields := []lineprotocol.Field{}
 	e := &point{
@@ -38,25 +48,31 @@ func New(sk []byte, ints, floats []string, p lineprotocol.Precision) *point {
 	return e
 }
 
+// Series returns the series key for a point.
 func (p *point) Series() []byte {
 	return p.seriesKey
 }
 
+// Fields returns the fields for a a point.
 func (p *point) Fields() []lineprotocol.Field {
 	return p.fields
 }
 
+// Time returns the timestamps for a point.
 func (p *point) Time() *lineprotocol.Timestamp {
 	return p.time
 }
 
+// SetTime set the t to be the timestamp for a point.
 func (p *point) SetTime(t time.Time) {
 	p.time.SetTime(&t)
 }
 
+// Update increments the value of all of the Int and Float
+// fields by 1.
 func (p *point) Update() {
 	for _, i := range p.Ints {
-		atomic.AddInt64(&i.Value, int64(1)) // maybe remove the go's
+		atomic.AddInt64(&i.Value, int64(1))
 	}
 
 	for _, f := range p.Floats {
@@ -66,6 +82,7 @@ func (p *point) Update() {
 	}
 }
 
+// NewPoints returns a slice of Points of length seriesN shaped like the given seriesKey.
 func NewPoints(seriesKey, fields string, seriesN int, pc lineprotocol.Precision) []lineprotocol.Point {
 	pts := []lineprotocol.Point{}
 	series := generateSeriesKeys(seriesKey, seriesN)

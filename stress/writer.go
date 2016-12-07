@@ -10,12 +10,15 @@ import (
 	"github.com/influxdata/influx-stress/write"
 )
 
+// WriteResult contains the latency, status code, and error type
+// each time a write happens.
 type WriteResult struct {
 	LatNs      int64
 	StatusCode int
 	Err        error
 }
 
+// WriteConfig specifies the configuration for the Write function.
 type WriteConfig struct {
 	BatchSize uint64
 	MaxPoints uint64
@@ -29,6 +32,10 @@ type WriteConfig struct {
 	Results  chan<- WriteResult
 }
 
+// Write takes in a slice of lineprotocol.Points, a write.Client, and a WriteConfig. It will attempt
+// to write data to the target until one of the following conditions is met.
+// 1. We reach that MaxPoints specified in the WriteConfig.
+// 2. We've passed the Deadline specified in the WriteConfig.
 func Write(pts []lineprotocol.Point, c write.Client, cfg WriteConfig) (uint64, time.Duration) {
 	if cfg.Results == nil {
 		panic("Results Channel on WriteConfig cannot be nil")

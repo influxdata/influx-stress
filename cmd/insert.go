@@ -108,7 +108,7 @@ func insertRun(cmd *cobra.Command, args []string) {
 	wg.Wait()
 	totalTime := time.Since(start)
 	if err := c.Close(); err != nil {
-		fmt.Fprintf(os.Stderr, "Error closing client:", err.Error())
+		fmt.Fprintf(os.Stderr, "Error closing client: %v\n", err.Error())
 	}
 
 	sink.Close()
