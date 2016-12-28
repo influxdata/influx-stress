@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math"
 	"os"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -41,6 +42,12 @@ func insertRun(cmd *cobra.Command, args []string) {
 	fieldStr := defaultFieldStr
 	if len(args) >= 1 {
 		seriesKey = args[0]
+		if !strings.Contains(seriesKey, ",") && !strings.Contains(seriesKey, "=") {
+			fmt.Fprintln(os.Stderr, "First positional argument must be a series key, got: ", seriesKey)
+			cmd.Usage()
+			os.Exit(1)
+			return
+		}
 	}
 	if len(args) == 2 {
 		fieldStr = args[1]
