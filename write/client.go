@@ -22,6 +22,8 @@ type ClientConfig struct {
 
 	Database        string
 	RetentionPolicy string
+	User            string
+	Pass            string
 	Precision       string
 	Consistency     string
 
@@ -55,6 +57,8 @@ func (c *client) Create(command string) error {
 
 	vals := url.Values{}
 	vals.Set("q", command)
+	vals.Set("u", c.cfg.User)
+	vals.Set("p", c.cfg.Pass)
 	resp, err := http.PostForm(c.cfg.BaseURL+"/query", vals)
 	if err != nil {
 		return err
@@ -170,6 +174,12 @@ func (c *fileClient) Close() error {
 func writeURLFromConfig(cfg ClientConfig) string {
 	params := url.Values{}
 	params.Set("db", cfg.Database)
+	if cfg.User != "" {
+		params.Set("u", cfg.User)
+	}
+	if cfg.Pass != "" {
+		params.Set("p", cfg.Pass)
+	}
 	if cfg.RetentionPolicy != "" {
 		params.Set("rp", cfg.RetentionPolicy)
 	}

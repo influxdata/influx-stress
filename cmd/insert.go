@@ -18,6 +18,7 @@ import (
 
 var (
 	host, db, rp, precision, consistency string
+	username, password                   string
 	createCommand, dump                  string
 	seriesN, gzip                        int
 	batchSize, pointsN, pps              uint64
@@ -132,6 +133,8 @@ func init() {
 	RootCmd.AddCommand(insertCmd)
 
 	insertCmd.Flags().StringVarP(&host, "host", "", "http://localhost:8086", "Address of InfluxDB instance")
+	insertCmd.Flags().StringVarP(&username, "user", "", "", "User to write data as")
+	insertCmd.Flags().StringVarP(&password, "pass", "", "", "Password for user")
 	insertCmd.Flags().StringVarP(&db, "db", "", "stress", "Database that will be written to")
 	insertCmd.Flags().StringVarP(&rp, "rp", "", "", "Retention Policy that will be written to")
 	insertCmd.Flags().StringVarP(&precision, "precision", "p", "n", "Resolution of data being written")
@@ -153,6 +156,8 @@ func client() write.Client {
 		BaseURL:         host,
 		Database:        db,
 		RetentionPolicy: rp,
+		User:            username,
+		Pass:            password,
 		Precision:       precision,
 		Consistency:     consistency,
 		Gzip:            gzip != 0,
