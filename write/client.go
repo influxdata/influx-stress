@@ -57,9 +57,14 @@ func (c *client) Create(command string) error {
 
 	vals := url.Values{}
 	vals.Set("q", command)
-	vals.Set("u", c.cfg.User)
-	vals.Set("p", c.cfg.Pass)
-	resp, err := http.PostForm(c.cfg.BaseURL+"/query", vals)
+	u, err := url.Parse(c.cfg.BaseURL)
+	if err != nil {
+		return err
+	}
+	if c.cfg.User != "" && c.cfg.Pass != "" {
+		u.User = url.UserPassword(c.cfg.User, c.cfg.Pass)
+	}
+	resp, err := http.PostForm(u.String()+"/query", vals)
 	if err != nil {
 		return err
 	}
