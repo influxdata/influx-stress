@@ -24,6 +24,7 @@ var (
 	batchSize, pointsN, pps              uint64
 	runtime                              time.Duration
 	fast, quiet                          bool
+	strict                               bool
 )
 
 const (
@@ -149,6 +150,7 @@ func init() {
 	insertCmd.Flags().StringVar(&createCommand, "create", "", "Use a custom create database command")
 	insertCmd.Flags().IntVar(&gzip, "gzip", 0, "If non-zero, gzip write bodies with given compression level. 1=best speed, 9=best compression, -1=gzip default.")
 	insertCmd.Flags().StringVar(&dump, "dump", "", "Dump to given file instead of writing over HTTP")
+	insertCmd.Flags().BoolVarP(&strict, "strict", "", false, "Strict mode will exit as soon as an error or unexpected status is encountered")
 }
 
 func client() write.Client {
@@ -209,7 +211,7 @@ func (s *resultSink) printErrors() {
 		}
 
 		if r.StatusCode != 204 {
-			fmt.Fprintln(os.Stderr, time.Now().Format(timeFormat), "Unexpected write status:", r.StatusCode)
+			fmt.Fprintln(os.Stderr, time.Now().Format(timeFormat), "Unexpected write: status", r.StatusCode, ", body:", r.Body)
 		}
 	}
 }

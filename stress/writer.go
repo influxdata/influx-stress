@@ -15,6 +15,7 @@ import (
 type WriteResult struct {
 	LatNs      int64
 	StatusCode int
+	Body       string // Only populated when unusual status code encountered.
 	Err        error
 }
 
@@ -106,10 +107,10 @@ WRITE_BATCHES:
 }
 
 func sendBatch(c write.Client, buf *bytes.Buffer, ch chan<- WriteResult) {
-	lat, status, err := c.Send(buf.Bytes())
+	lat, status, body, err := c.Send(buf.Bytes())
 	buf.Reset()
 	select {
-	case ch <- WriteResult{LatNs: lat, StatusCode: status, Err: err}:
+	case ch <- WriteResult{LatNs: lat, StatusCode: status, Body: body, Err: err}:
 	default:
 	}
 }
