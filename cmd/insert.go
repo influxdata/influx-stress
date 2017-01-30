@@ -190,7 +190,7 @@ func newResultSink(nWriters int) *resultSink {
 	}
 
 	s.wg.Add(1)
-	go s.printErrors()
+	go s.checkErrors()
 
 	return s
 }
@@ -200,7 +200,7 @@ func (s *resultSink) Close() {
 	s.wg.Wait()
 }
 
-func (s *resultSink) printErrors() {
+func (s *resultSink) checkErrors() {
 	defer s.wg.Done()
 
 	const timeFormat = "[2006-01-02 15:04:05]"
@@ -212,6 +212,11 @@ func (s *resultSink) printErrors() {
 
 		if r.StatusCode != 204 {
 			fmt.Fprintln(os.Stderr, time.Now().Format(timeFormat), "Unexpected write: status", r.StatusCode, ", body:", r.Body)
+		}
+
+		// If we're running in strict mode then we give up at the first error.
+		if strict && (r.Err != nil || r.StatusCode != 204) {
+			os.Exit(1)
 		}
 	}
 }
