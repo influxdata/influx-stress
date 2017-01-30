@@ -32,7 +32,7 @@ type ClientConfig struct {
 
 type Client interface {
 	Create(string) error
-	Send([]byte) (latNs int64, statusCode int, err error)
+	Send([]byte) (latNs int64, statusCode int, body string, err error)
 
 	Close() error
 }
@@ -81,7 +81,7 @@ func (c *client) Create(command string) error {
 	return nil
 }
 
-func (c *client) Send(b []byte) (latNs int64, statusCode int, err error) {
+func (c *client) Send(b []byte) (latNs int64, statusCode int, body string, err error) {
 	req := fasthttp.AcquireRequest()
 	req.Header.SetContentTypeBytes([]byte("text/plain"))
 	req.Header.SetMethodBytes([]byte("POST"))
@@ -98,6 +98,11 @@ func (c *client) Send(b []byte) (latNs int64, statusCode int, err error) {
 	err = fasthttp.Do(req, resp)
 	latNs = time.Since(start).Nanoseconds()
 	statusCode = resp.StatusCode()
+
+	// Save the body.
+	if statusCode != http.StatusNoContent {
+		body = string(resp.Body())
+	}
 
 	fasthttp.ReleaseResponse(resp)
 	fasthttp.ReleaseRequest(req)
@@ -145,7 +150,7 @@ func (c *fileClient) Create(command string) error {
 	return err
 }
 
-func (c *fileClient) Send(b []byte) (latNs int64, statusCode int, err error) {
+func (c *fileClient) Send(b []byte) (latNs int64, statusCode int, body string, err error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
