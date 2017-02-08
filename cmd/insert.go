@@ -81,6 +81,10 @@ func insertRun(cmd *cobra.Command, args []string) {
 
 	pts := point.NewPoints(seriesKey, fieldStr, seriesN, lineprotocol.Nanosecond)
 
+	startSplit := 0
+	inc := int(seriesN) / int(concurrency)
+	endSplit := inc
+
 	sink := newResultSink(int(concurrency))
 
 	var wg sync.WaitGroup
@@ -90,7 +94,8 @@ func insertRun(cmd *cobra.Command, args []string) {
 
 	start := time.Now()
 	for i := uint64(0); i < concurrency; i++ {
-		go func() {
+
+		go func(startSplit, endSplit int) {
 			tick := time.Tick(time.Second)
 
 			if fast {
@@ -107,11 +112,14 @@ func insertRun(cmd *cobra.Command, args []string) {
 			}
 
 			// Ignore duration from a single call to Write.
-			pointsWritten, _ := stress.Write(pts, c, cfg)
+			pointsWritten, _ := stress.Write(pts[startSplit:endSplit], c, cfg)
 			atomic.AddUint64(&totalWritten, pointsWritten)
 
 			wg.Done()
-		}()
+		}(startSplit, endSplit)
+
+		startSplit = endSplit
+		endSplit += inc
 	}
 
 	wg.Wait()
