@@ -37,7 +37,7 @@ type WriteConfig struct {
 // to write data to the target until one of the following conditions is met.
 // 1. We reach that MaxPoints specified in the WriteConfig.
 // 2. We've passed the Deadline specified in the WriteConfig.
-func Write(pts []lineprotocol.Point, c write.Client, cfg WriteConfig) (uint64, time.Duration) {
+func Write(pc <-chan []lineprotocol.Point, c write.Client, cfg WriteConfig) (uint64, time.Duration) {
 	if cfg.Results == nil {
 		panic("Results Channel on WriteConfig cannot be nil")
 	}
@@ -71,6 +71,8 @@ WRITE_BATCHES:
 			break
 		}
 
+		// Get next batch of points from the generator.
+		pts := <-pc
 		for _, pt := range pts {
 			pointCount++
 			pt.SetTime(t)

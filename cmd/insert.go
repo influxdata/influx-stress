@@ -79,8 +79,7 @@ func insertRun(cmd *cobra.Command, args []string) {
 		return
 	}
 
-	pts := point.NewPoints(seriesKey, fieldStr, seriesN, lineprotocol.Nanosecond)
-
+	// pts := point.NewPoints(seriesKey, fieldStr, seriesN, lineprotocol.Nanosecond)
 	sink := newResultSink(int(concurrency))
 
 	var wg sync.WaitGroup
@@ -88,9 +87,14 @@ func insertRun(cmd *cobra.Command, args []string) {
 
 	var totalWritten uint64
 
+	var ptsChans []chan []lineprotocol.Point
+
 	start := time.Now()
 	for i := uint64(0); i < concurrency; i++ {
-		go func() {
+		ch := make(chan []lineprotocol.Point)
+		ptsChans = append(ptsChans, ch)
+
+		go func(pc chan []lineprotocol.Point) {
 			tick := time.Tick(time.Second)
 
 			if fast {
@@ -107,12 +111,36 @@ func insertRun(cmd *cobra.Command, args []string) {
 			}
 
 			// Ignore duration from a single call to Write.
-			pointsWritten, _ := stress.Write(pts, c, cfg)
+			pointsWritten, _ := stress.Write(pc, c, cfg)
 			atomic.AddUint64(&totalWritten, pointsWritten)
 
 			wg.Done()
-		}()
+		}(ch)
 	}
+
+	// This goroutine pulls batches from the generators and multiplexes them
+	// onto each writer, so that the correct number of series/points are
+	// written.
+	go func() {
+		generator := point.NewPointGenerator(seriesKey, fieldStr, seriesN, lineprotocol.Nanosecond)
+
+		for {
+			// Next batch of points
+			pts := generator.Next()
+			// Multiplex them out to all writers.
+			for _, c := range ptsChans {
+				if len(pts) == 0 {
+					close(c)
+					continue
+				}
+				c <- pts
+			}
+
+			if len(pts) == 0 {
+				return
+			}
+		}
+	}()
 
 	wg.Wait()
 	totalTime := time.Since(start)
