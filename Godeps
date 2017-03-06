@@ -1,0 +1,7 @@
+github.com/influxdata/influx-stress 860b80eb2970c4426a44f5a9f86053b40f34d7ad
+github.com/klauspost/compress 14eb9c4951195779ecfbec34431a976de7335b0a
+github.com/klauspost/cpuid 09cded8978dc9e80714c4d85b0322337b0a1e5e0
+github.com/klauspost/crc32 cb6bfca970f6908083f26f39a79009d608efd5cd
+github.com/spf13/cobra 9c28e4bbd74e5c3ed7aacbc552b2cab7cfdfe744
+github.com/spf13/pflag 7b17cc4658ef5ca157b986ea5c0b43af7938532b
+github.com/valyala/fasthttp fcba2aa2f2a878517d0084ba29fcf5c09940dbb5
