@@ -214,6 +214,12 @@ func (s *resultSink) checkErrors() {
 	const timeFormat = "[2006-01-02 15:04:05]"
 	for r := range s.Chan {
 		if r.Err != nil {
+			if !strings.Contains(r.Err.Error(), "no free connections available to host") {
+				continue
+			}
+			if !strings.Contains(r.Err.Error(), "status 0 , body:") {
+				continue
+			}
 			fmt.Fprintln(os.Stderr, time.Now().Format(timeFormat), "Error sending write:", r.Err.Error())
 			continue
 		}
