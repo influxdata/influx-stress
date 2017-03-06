@@ -61,6 +61,7 @@ func Write(pts []lineprotocol.Point, c write.Client, cfg WriteConfig) (uint64, t
 		w = gzw
 	}
 
+	tPrev := t
 WRITE_BATCHES:
 	for {
 		if t.After(cfg.Deadline) {
@@ -101,6 +102,13 @@ WRITE_BATCHES:
 			}
 			pt.Update()
 		}
+
+		// Avoid timestamp colision when batch size > pts
+		if t.After(tPrev) {
+			tPrev = t
+			continue
+		}
+		t = t.Add(1 * time.Nanosecond)
 	}
 
 	return pointCount, time.Since(start)
