@@ -1,5 +1,11 @@
 # Stress tool
 
+## Build Instructions
+```sh
+gdm restore
+go install ./...
+```
+
 ## Top Level Command
 ```
 Create artificial load on an InfluxDB instance
@@ -18,7 +24,6 @@ Usage:
 
 ## Insert Subcommand
 ```bash
-$ influx-stress insert -h
 Insert data into InfluxDB
 
 Usage:
@@ -33,6 +38,7 @@ Flags:
   -f, --fast                 Run as fast as possible
       --gzip int             If non-zero, gzip write bodies with given compression level. 1=best speed, 9=best compression, -1=gzip default.
       --host string          Address of InfluxDB instance (default "http://localhost:8086")
+      --pass string          Password for user
   -n, --points uint          number of points that will be written (default 18446744073709551615)
       --pps uint             Points Per Second (default 200000)
   -p, --precision string     Resolution of data being written (default "n")
@@ -40,6 +46,8 @@ Flags:
       --rp string            Retention Policy that will be written to
   -r, --runtime duration     Total time that the test will run (default 2562047h47m16.854775807s)
   -s, --series int           number of series that will be written (default 100000)
+      --strict               Strict mode will exit as soon as an error or unexpected status is encountered
+      --user string          User to write data as
 ```
 
 ## Example Usage
