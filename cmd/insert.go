@@ -80,12 +80,12 @@ func insertRun(cmd *cobra.Command, args []string) {
 
 	c := client()
 
-	if err := c.Create(createCommand); err != nil {
-		fmt.Fprintln(os.Stderr, "Failed to create database:", err.Error())
-		fmt.Fprintln(os.Stderr, "Aborting.")
-		os.Exit(1)
-		return
-	}
+	//if err := c.Create(createCommand); err != nil {
+	//	fmt.Fprintln(os.Stderr, "Failed to create database:", err.Error())
+	//	fmt.Fprintln(os.Stderr, "Aborting.")
+	//	os.Exit(1)
+	//	return
+	//}
 	seriesN = len(seriesKeys)
 
 	pts := point.NewPoints(seriesKeys, fieldStr, seriesN, lineprotocol.Nanosecond)
