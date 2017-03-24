@@ -83,11 +83,11 @@ func (p *point) Update() {
 }
 
 // NewPoints returns a slice of Points of length seriesN shaped like the given seriesKey.
-func NewPoints(seriesKey, fields string, seriesN int, pc lineprotocol.Precision) []lineprotocol.Point {
+func NewPoints(seriesKeys [][]byte, fields string, seriesN int, pc lineprotocol.Precision) []lineprotocol.Point {
 	pts := []lineprotocol.Point{}
-	series := generateSeriesKeys(seriesKey, seriesN)
+	//series := generateSeriesKeys(seriesKey, seriesN)
 	ints, floats := generateFieldSet(fields)
-	for _, sk := range series {
+	for _, sk := range seriesKeys {
 		p := New(sk, ints, floats, pc)
 		pts = append(pts, p)
 	}

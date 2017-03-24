@@ -1,10 +1,11 @@
 package cmd
 
 import (
+	"bytes"
 	"fmt"
+	"io/ioutil"
 	"math"
 	"os"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -42,14 +43,21 @@ var insertCmd = &cobra.Command{
 func insertRun(cmd *cobra.Command, args []string) {
 	seriesKey := defaultSeriesKey
 	fieldStr := defaultFieldStr
+	var seriesKeys [][]byte
 	if len(args) >= 1 {
 		seriesKey = args[0]
-		if !strings.Contains(seriesKey, ",") && !strings.Contains(seriesKey, "=") {
-			fmt.Fprintln(os.Stderr, "First positional argument must be a series key, got: ", seriesKey)
-			cmd.Usage()
+		data, err := ioutil.ReadFile(seriesKey)
+		if err != nil {
+			fmt.Println(err)
 			os.Exit(1)
-			return
 		}
+		seriesKeys = bytes.Split(data, []byte("\n"))
+		//if !strings.Contains(seriesKey, ",") && !strings.Contains(seriesKey, "=") {
+		//	fmt.Fprintln(os.Stderr, "First positional argument must be a series key, got: ", seriesKey)
+		//	cmd.Usage()
+		//	os.Exit(1)
+		//	return
+		//}
 	}
 	if len(args) == 2 {
 		fieldStr = args[1]
@@ -78,8 +86,9 @@ func insertRun(cmd *cobra.Command, args []string) {
 		os.Exit(1)
 		return
 	}
+	seriesN = len(seriesKeys)
 
-	pts := point.NewPoints(seriesKey, fieldStr, seriesN, lineprotocol.Nanosecond)
+	pts := point.NewPoints(seriesKeys, fieldStr, seriesN, lineprotocol.Nanosecond)
 
 	startSplit := 0
 	inc := int(seriesN) / int(concurrency)
