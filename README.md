@@ -2,8 +2,7 @@
 
 ## Build Instructions
 ```sh
-gdm restore
-go install ./...
+go install ./cmd/... ./lineprotocol/... ./point/... ./stress/... ./write/...
 ```
 
 ## Top Level Command
