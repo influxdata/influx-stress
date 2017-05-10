@@ -24,7 +24,7 @@ var (
 	batchSize, pointsN, pps              uint64
 	runtime                              time.Duration
 	fast, quiet                          bool
-	strict                               bool
+	strict, kapacitorMode                bool
 )
 
 const (
@@ -72,11 +72,13 @@ func insertRun(cmd *cobra.Command, args []string) {
 
 	c := client()
 
-	if err := c.Create(createCommand); err != nil {
-		fmt.Fprintln(os.Stderr, "Failed to create database:", err.Error())
-		fmt.Fprintln(os.Stderr, "Aborting.")
-		os.Exit(1)
-		return
+	if !kapacitorMode {
+		if err := c.Create(createCommand); err != nil {
+			fmt.Fprintln(os.Stderr, "Failed to create database:", err.Error())
+			fmt.Fprintln(os.Stderr, "Aborting.")
+			os.Exit(1)
+			return
+		}
 	}
 
 	pts := point.NewPoints(seriesKey, fieldStr, seriesN, lineprotocol.Nanosecond)
@@ -156,6 +158,7 @@ func init() {
 	insertCmd.Flags().BoolVarP(&fast, "fast", "f", false, "Run as fast as possible")
 	insertCmd.Flags().BoolVarP(&quiet, "quiet", "q", false, "Only print the write throughput")
 	insertCmd.Flags().StringVar(&createCommand, "create", "", "Use a custom create database command")
+	insertCmd.Flags().BoolVarP(&kapacitorMode, "kapacitor", "k", false, "Use Kapacitor mode, namely do not try to run any queries.")
 	insertCmd.Flags().IntVar(&gzip, "gzip", 0, "If non-zero, gzip write bodies with given compression level. 1=best speed, 9=best compression, -1=gzip default.")
 	insertCmd.Flags().StringVar(&dump, "dump", "", "Dump to given file instead of writing over HTTP")
 	insertCmd.Flags().BoolVarP(&strict, "strict", "", false, "Strict mode will exit as soon as an error or unexpected status is encountered")
