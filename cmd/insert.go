@@ -56,6 +56,12 @@ func insertRun(cmd *cobra.Command, args []string) {
 	}
 
 	concurrency := pps / batchSize
+	// PPS takes precedence over batchSize.
+	// Adjust accordingly.
+	if pps < batchSize {
+		batchSize = pps
+		concurrency = 1
+	}
 	if !quiet {
 		fmt.Printf("Using point template: %s %s <timestamp>\n", seriesKey, fieldStr)
 		fmt.Printf("Using batch size of %d line(s)\n", batchSize)
