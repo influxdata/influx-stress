@@ -17,6 +17,7 @@ type WriteResult struct {
 	StatusCode int
 	Body       string // Only populated when unusual status code encountered.
 	Err        error
+	Timestamp  int64
 }
 
 // WriteConfig specifies the configuration for the Write function.
@@ -118,7 +119,7 @@ func sendBatch(c write.Client, buf *bytes.Buffer, ch chan<- WriteResult) {
 	lat, status, body, err := c.Send(buf.Bytes())
 	buf.Reset()
 	select {
-	case ch <- WriteResult{LatNs: lat, StatusCode: status, Body: body, Err: err}:
+	case ch <- WriteResult{LatNs: lat, StatusCode: status, Body: body, Err: err, Timestamp: time.Now().UnixNano()}:
 	default:
 	}
 }

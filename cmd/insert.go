@@ -1,6 +1,8 @@
 package cmd
 
 import (
+	"bytes"
+	"errors"
 	"fmt"
 	"math"
 	"os"
@@ -17,14 +19,17 @@ import (
 )
 
 var (
+	statsHost, statsDB                   string
 	host, db, rp, precision, consistency string
 	username, password                   string
 	createCommand, dump                  string
 	seriesN, gzip                        int
 	batchSize, pointsN, pps              uint64
 	runtime                              time.Duration
+	tick                                 time.Duration
 	fast, quiet                          bool
 	strict, kapacitorMode                bool
+	recordStats                          bool
 )
 
 const (
@@ -93,7 +98,14 @@ func insertRun(cmd *cobra.Command, args []string) {
 	inc := int(seriesN) / int(concurrency)
 	endSplit := inc
 
-	sink := newResultSink(int(concurrency))
+	sink := newMultiSink(int(concurrency))
+	sink.AddSink(newErrorSink(int(concurrency)))
+
+	if recordStats {
+		sink.AddSink(newInfluxDBSink(int(concurrency), statsHost, statsDB))
+	}
+
+	sink.Open()
 
 	var wg sync.WaitGroup
 	wg.Add(int(concurrency))
@@ -104,7 +116,7 @@ func insertRun(cmd *cobra.Command, args []string) {
 	for i := uint64(0); i < concurrency; i++ {
 
 		go func(startSplit, endSplit int) {
-			tick := time.Tick(time.Second)
+			tick := time.Tick(tick)
 
 			if fast {
 				tick = time.Tick(time.Nanosecond)
@@ -116,7 +128,7 @@ func insertRun(cmd *cobra.Command, args []string) {
 				GzipLevel: gzip,
 				Deadline:  time.Now().Add(runtime),
 				Tick:      tick,
-				Results:   sink.Chan,
+				Results:   sink.Chan(),
 			}
 
 			// Ignore duration from a single call to Write.
@@ -148,7 +160,9 @@ func insertRun(cmd *cobra.Command, args []string) {
 
 func init() {
 	RootCmd.AddCommand(insertCmd)
-
+	insertCmd.Flags().StringVarP(&statsHost, "stats-host", "", "http://localhost:8086", "Address of InfluxDB instance where runtime statistics will be recorded")
+	insertCmd.Flags().StringVarP(&statsDB, "stats-db", "", "stress_stats", "Database that statistics will be written to")
+	insertCmd.Flags().BoolVarP(&recordStats, "stats", "", false, "Record runtime statistics")
 	insertCmd.Flags().StringVarP(&host, "host", "", "http://localhost:8086", "Address of InfluxDB instance")
 	insertCmd.Flags().StringVarP(&username, "user", "", "", "User to write data as")
 	insertCmd.Flags().StringVarP(&password, "pass", "", "", "Password for user")
@@ -161,6 +175,7 @@ func init() {
 	insertCmd.Flags().Uint64VarP(&batchSize, "batch-size", "b", 10000, "number of points in a batch")
 	insertCmd.Flags().Uint64VarP(&pps, "pps", "", 200000, "Points Per Second")
 	insertCmd.Flags().DurationVarP(&runtime, "runtime", "r", time.Duration(math.MaxInt64), "Total time that the test will run")
+	insertCmd.Flags().DurationVarP(&tick, "tick", "", time.Second, "Amount of time between request")
 	insertCmd.Flags().BoolVarP(&fast, "fast", "f", false, "Run as fast as possible")
 	insertCmd.Flags().BoolVarP(&quiet, "quiet", "q", false, "Only print the write throughput")
 	insertCmd.Flags().StringVar(&createCommand, "create", "", "Use a custom create database command")
@@ -195,15 +210,21 @@ func client() write.Client {
 	return write.NewClient(cfg)
 }
 
-type resultSink struct {
-	Chan chan stress.WriteResult
+type Sink interface {
+	Chan() chan stress.WriteResult
+	Open()
+	Close()
+}
+
+type errorSink struct {
+	Ch chan stress.WriteResult
 
 	wg sync.WaitGroup
 }
 
-func newResultSink(nWriters int) *resultSink {
-	s := &resultSink{
-		Chan: make(chan stress.WriteResult, 8*nWriters),
+func newErrorSink(nWriters int) *errorSink {
+	s := &errorSink{
+		Ch: make(chan stress.WriteResult, 8*nWriters),
 	}
 
 	s.wg.Add(1)
@@ -212,16 +233,21 @@ func newResultSink(nWriters int) *resultSink {
 	return s
 }
 
-func (s *resultSink) Close() {
-	close(s.Chan)
+func (s *errorSink) Open() {
+	s.wg.Add(1)
+	go s.checkErrors()
+}
+
+func (s *errorSink) Close() {
+	close(s.Ch)
 	s.wg.Wait()
 }
 
-func (s *resultSink) checkErrors() {
+func (s *errorSink) checkErrors() {
 	defer s.wg.Done()
 
 	const timeFormat = "[2006-01-02 15:04:05]"
-	for r := range s.Chan {
+	for r := range s.Ch {
 		if r.Err != nil {
 			fmt.Fprintln(os.Stderr, time.Now().Format(timeFormat), "Error sending write:", r.Err.Error())
 			continue
@@ -234,6 +260,125 @@ func (s *resultSink) checkErrors() {
 		// If we're running in strict mode then we give up at the first error.
 		if strict && (r.Err != nil || r.StatusCode != 204) {
 			os.Exit(1)
+		}
+	}
+}
+
+func (s *errorSink) Chan() chan stress.WriteResult {
+	return s.Ch
+}
+
+type multiSink struct {
+	Ch chan stress.WriteResult
+
+	sinks []Sink
+
+	open bool
+}
+
+func newMultiSink(nWriters int) *multiSink {
+	return &multiSink{
+		Ch: make(chan stress.WriteResult, 8*nWriters),
+	}
+}
+
+func (s *multiSink) Chan() chan stress.WriteResult {
+	return s.Ch
+}
+
+func (s *multiSink) Open() {
+	s.open = true
+	for _, sink := range s.sinks {
+		sink.Open()
+	}
+
+	go s.run()
+}
+
+func (s *multiSink) run() {
+	const timeFormat = "[2006-01-02 15:04:05]"
+	for r := range s.Ch {
+		for _, sink := range s.sinks {
+			select {
+			case sink.Chan() <- r:
+			default:
+				fmt.Fprintln(os.Stderr, time.Now().Format(timeFormat), "Failed to send to sin")
+			}
+		}
+	}
+}
+
+func (s *multiSink) Close() {
+	s.open = false
+	for _, sink := range s.sinks {
+		sink.Close()
+	}
+}
+
+func (s *multiSink) AddSink(sink Sink) error {
+	if s.open {
+		return errors.New("Cannot add sink to open multiSink")
+	}
+
+	s.sinks = append(s.sinks, sink)
+
+	return nil
+}
+
+type influxDBSink struct {
+	Ch     chan stress.WriteResult
+	client write.Client
+	buf    *bytes.Buffer
+	ticker *time.Ticker
+}
+
+func newInfluxDBSink(nWriters int, url, db string) *influxDBSink {
+	cfg := write.ClientConfig{
+		BaseURL:         url,
+		Database:        db,
+		RetentionPolicy: "autogen",
+		Precision:       "ns",
+		Consistency:     "any",
+		Gzip:            false,
+	}
+
+	return &influxDBSink{
+		Ch:     make(chan stress.WriteResult, 8*nWriters),
+		client: write.NewClient(cfg),
+		buf:    bytes.NewBuffer(nil),
+	}
+}
+
+func (s *influxDBSink) Chan() chan stress.WriteResult {
+	return s.Ch
+}
+
+func (s *influxDBSink) Open() {
+	s.ticker = time.NewTicker(time.Second)
+	err := s.client.Create("")
+	if err != nil {
+		panic(err)
+	}
+
+	go s.run()
+}
+
+func (s *influxDBSink) Close() {
+}
+
+func (s *influxDBSink) run() {
+	for {
+		select {
+		case <-s.ticker.C:
+			// Write batch
+			s.client.Send(s.buf.Bytes())
+			s.buf.Reset()
+		case result := <-s.Ch:
+			// Add to batch
+			if result.Err != nil {
+				continue
+			}
+			s.buf.WriteString(fmt.Sprintf("req,status=%v latNs=%v %v\n", result.StatusCode, result.LatNs, result.Timestamp))
 		}
 	}
 }
