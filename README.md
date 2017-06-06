@@ -10,15 +10,15 @@ go install ./cmd/... ./lineprotocol/... ./point/... ./stress/... ./write/...
 Create artificial load on an InfluxDB instance
 
 Usage:
-  influx-stress [command]
+  influx_stress [command]
 
   Available Commands:
     insert      Insert data into InfluxDB
 
     Flags:
-      -h, --help   help for influx-stress
+      -h, --help   help for influx_stress
 
-      Use "influx-stress [command] --help" for more information about a command.
+      Use "influx_stress [command] --help" for more information about a command.
 ```
 
 ## Insert Subcommand
@@ -26,7 +26,7 @@ Usage:
 Insert data into InfluxDB
 
 Usage:
-  influx-stress insert SERIES FIELDS [flags]
+  influx_stress insert SERIES FIELDS [flags]
 
 Flags:
   -b, --batch-size uint      number of points in a batch (default 10000)
@@ -53,30 +53,30 @@ Flags:
 
 Runs forever
 ```bash
-$ influx-stress insert
+$ influx_stress insert
 ```
 
 Runs forever writing as fast as possible
 ```bash
-$ influx-stress insert -f
+$ influx_stress insert -f
 ```
 
 Runs for 1 minute writing as fast as possible
 ```bash
-$ influx-stress insert -r 1m -f
+$ influx_stress insert -r 1m -f
 ```
 
 Writing an example series key
 ```bash
-$ influx-stress insert cpu,host=server,location=us-west,id=myid
+$ influx_stress insert cpu,host=server,location=us-west,id=myid
 ```
 
 Writing an example series key with 20,000 series
 ```bash
-$ influx-stress insert -s 20000 cpu,host=server,location=us-west,id=myid
+$ influx_stress insert -s 20000 cpu,host=server,location=us-west,id=myid
 ```
 
 Writing an example point
 ```bash
-$ influx-stress insert cpu,host=server,location=us-west,id=myid busy=100,idle=10,random=5i
+$ influx_stress insert cpu,host=server,location=us-west,id=myid busy=100,idle=10,random=5i
 ```
