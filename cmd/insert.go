@@ -26,6 +26,7 @@ var (
 	seriesN, gzip                        int
 	batchSize, pointsN, pps              uint64
 	runtime                              time.Duration
+	tick                                 time.Duration
 	fast, quiet                          bool
 	strict, kapacitorMode                bool
 	recordStats                          bool
@@ -115,7 +116,7 @@ func insertRun(cmd *cobra.Command, args []string) {
 	for i := uint64(0); i < concurrency; i++ {
 
 		go func(startSplit, endSplit int) {
-			tick := time.Tick(time.Second)
+			tick := time.Tick(tick)
 
 			if fast {
 				tick = time.Tick(time.Nanosecond)
@@ -174,6 +175,7 @@ func init() {
 	insertCmd.Flags().Uint64VarP(&batchSize, "batch-size", "b", 10000, "number of points in a batch")
 	insertCmd.Flags().Uint64VarP(&pps, "pps", "", 200000, "Points Per Second")
 	insertCmd.Flags().DurationVarP(&runtime, "runtime", "r", time.Duration(math.MaxInt64), "Total time that the test will run")
+	insertCmd.Flags().DurationVarP(&tick, "tick", "", time.Second, "Amount of time between request")
 	insertCmd.Flags().BoolVarP(&fast, "fast", "f", false, "Run as fast as possible")
 	insertCmd.Flags().BoolVarP(&quiet, "quiet", "q", false, "Only print the write throughput")
 	insertCmd.Flags().StringVar(&createCommand, "create", "", "Use a custom create database command")
