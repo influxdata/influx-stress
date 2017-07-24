@@ -1,8 +1,10 @@
 # Stress tool
 
 ## Build Instructions
+Building `influx-stress` requires the Golang toolchain. If you do not have the Golang toolchain installed
+please follow the instructions [golang.org/doc/install](https://golang.org/doc/install)
 ```sh
-go install ./cmd/... ./lineprotocol/... ./point/... ./stress/... ./write/...
+go get -v github.com/influxdata/influx-stress/cmd/...
 ```
 
 ## Top Level Command
