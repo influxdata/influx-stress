@@ -1,6 +1,7 @@
 package write
 
 import (
+	"crypto/tls"
 	"fmt"
 	"io/ioutil"
 	"net/http"
@@ -26,6 +27,7 @@ type ClientConfig struct {
 	Pass            string
 	Precision       string
 	Consistency     string
+	TLSSkipVerify   bool
 
 	Gzip bool
 }
@@ -41,12 +43,23 @@ type client struct {
 	url []byte
 
 	cfg ClientConfig
+
+	httpClient *fasthttp.Client
 }
 
 func NewClient(cfg ClientConfig) Client {
+	var httpClient *fasthttp.Client
+	if cfg.TLSSkipVerify {
+		httpClient = &fasthttp.Client{
+			TLSConfig: &tls.Config{
+				InsecureSkipVerify: true,
+			},
+		}
+	}
 	return &client{
-		url: []byte(writeURLFromConfig(cfg)),
-		cfg: cfg,
+		url:        []byte(writeURLFromConfig(cfg)),
+		cfg:        cfg,
+		httpClient: httpClient,
 	}
 }
 
@@ -95,7 +108,12 @@ func (c *client) Send(b []byte) (latNs int64, statusCode int, body string, err e
 	resp := fasthttp.AcquireResponse()
 	start := time.Now()
 
-	err = fasthttp.Do(req, resp)
+	do := fasthttp.Do
+	if c.httpClient != nil {
+		do = c.httpClient.Do
+	}
+
+	err = do(req, resp)
 	latNs = time.Since(start).Nanoseconds()
 	statusCode = resp.StatusCode()
 

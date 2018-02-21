@@ -30,6 +30,7 @@ var (
 	fast, quiet                          bool
 	strict, kapacitorMode                bool
 	recordStats                          bool
+	tlsSkipVerify                        bool
 )
 
 const (
@@ -183,6 +184,7 @@ func init() {
 	insertCmd.Flags().IntVar(&gzip, "gzip", 0, "If non-zero, gzip write bodies with given compression level. 1=best speed, 9=best compression, -1=gzip default.")
 	insertCmd.Flags().StringVar(&dump, "dump", "", "Dump to given file instead of writing over HTTP")
 	insertCmd.Flags().BoolVarP(&strict, "strict", "", false, "Strict mode will exit as soon as an error or unexpected status is encountered")
+	insertCmd.Flags().BoolVarP(&tlsSkipVerify, "tls-skip-verify", "", false, "Skip verify in for TLS")
 }
 
 func client() write.Client {
@@ -194,6 +196,7 @@ func client() write.Client {
 		Pass:            password,
 		Precision:       precision,
 		Consistency:     consistency,
+		TLSSkipVerify:   tlsSkipVerify,
 		Gzip:            gzip != 0,
 	}
 
