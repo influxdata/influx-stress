@@ -70,6 +70,12 @@ func insertRun(cmd *cobra.Command, args []string) {
 		batchSize = pps
 		concurrency = 1
 	}
+	if uint64(seriesN) < batchSize {
+		// otherwise, the tool will generate points with identical timestamp
+		fmt.Fprintf(os.Stderr, "series number(%v) should not be smaller than batch size(%v)\n", seriesN, batchSize)
+		os.Exit(1)
+		return
+	}
 	if !quiet {
 		fmt.Printf("Using point template: %s %s <timestamp>\n", seriesKey, fieldStr)
 		fmt.Printf("Using batch size of %d line(s)\n", batchSize)
@@ -127,7 +133,7 @@ func insertRun(cmd *cobra.Command, args []string) {
 
 			cfg := stress.WriteConfig{
 				BatchSize: batchSize,
-				MaxPoints: pointsN / concurrency, // divide by concurreny
+				MaxPoints: pointsN / concurrency, // divide by concurrency
 				GzipLevel: gzip,
 				Deadline:  time.Now().Add(runtime),
 				Tick:      tick,
