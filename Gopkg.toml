@@ -1,8 +1,0 @@
-
-[[dependencies]]
-  name = "github.com/spf13/cobra"
-  revision = "9c28e4bbd74e5c3ed7aacbc552b2cab7cfdfe744"
-
-[[dependencies]]
-  name = "github.com/valyala/fasthttp"
-  revision = "fcba2aa2f2a878517d0084ba29fcf5c09940dbb5"
