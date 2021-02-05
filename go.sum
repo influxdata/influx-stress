@@ -1,0 +1,13 @@
+github.com/inconshreveable/mousetrap v1.0.0/go.mod h1:PxqpIevigyE2G7u3NXJIT2ANytuPF1OarO4DADm73n8=
+github.com/klauspost/compress v0.0.0-20160421081654-14eb9c495119 h1:Bytj46Eo7i9LGkdBGofDEtgvWDfYnuMN8GFLhQ+di70=
+github.com/klauspost/compress v0.0.0-20160421081654-14eb9c495119/go.mod h1:RyIbtBH6LamlWaDj8nUwkbUhJ87Yi3uG0guNDohfE1A=
+github.com/klauspost/cpuid v0.0.0-20160302075316-09cded8978dc h1:WW8B7p7QBnFlqRVv/k6ro/S8Z7tCnYjJHcQNScx9YVs=
+github.com/klauspost/cpuid v0.0.0-20160302075316-09cded8978dc/go.mod h1:Pj4uuM528wm8OyEC2QMXAi2YiTZ96dNQPGgoMS4s3ek=
+github.com/klauspost/crc32 v0.0.0-20161016154125-cb6bfca970f6 h1:KAZ1BW2TCmT6PRihDPpocIy1QTtsAsrx6TneU/4+CMg=
+github.com/klauspost/crc32 v0.0.0-20161016154125-cb6bfca970f6/go.mod h1:+ZoRqAPRLkC4NPOvfYeR5KNOrY6TD+/sAC3HXPZgDYg=
+github.com/spf13/cobra v0.0.0-20160830174925-9c28e4bbd74e h1:YdP6GKJS0Ls++kXc85WCCX2ArKToqixBwpBrWP/5J/k=
+github.com/spf13/cobra v0.0.0-20160830174925-9c28e4bbd74e/go.mod h1:1l0Ry5zgKvJasoi3XT1TypsSe7PqH0Sj9dhYf7v3XqQ=
+github.com/spf13/pflag v0.0.0-20160911194638-7b17cc4658ef h1:ipu6dZowKE24iMz94eTcfo3eCbci3rFmHLPiytvO4vc=
+github.com/spf13/pflag v0.0.0-20160911194638-7b17cc4658ef/go.mod h1:DYY7MBk1bdzusC3SYhjObp+wFpr4gzcvqqNjLnInEg4=
+github.com/valyala/fasthttp v0.0.0-20160506153629-fcba2aa2f2a8 h1:sj34QyUZuUU8nsORy4WoAVajhl/m10pjUEFz1OltSlM=
+github.com/valyala/fasthttp v0.0.0-20160506153629-fcba2aa2f2a8/go.mod h1:+g/po7GqyG5E+1CNgquiIxJnsXEi5vwFn5weFujbO78=
