@@ -2,6 +2,8 @@ package fasthttp
 
 import (
 	"bytes"
+	"errors"
+	"fmt"
 	"io"
 	"sync"
 )
@@ -36,7 +38,7 @@ var uriPool = &sync.Pool{
 //
 // URI instance MUST NOT be used from concurrently running goroutines.
 type URI struct {
-	noCopy noCopy
+	noCopy noCopy //nolint:unused,structcheck
 
 	pathOriginal []byte
 	scheme       []byte
@@ -48,10 +50,20 @@ type URI struct {
 	queryArgs       Args
 	parsedQueryArgs bool
 
+	// Path values are sent as-is without normalization
+	//
+	// Disabled path normalization may be useful for proxying incoming requests
+	// to servers that are expecting paths to be forwarded as-is.
+	//
+	// By default path values are normalized, i.e.
+	// extra slashes are removed, special characters are encoded.
+	DisablePathNormalizing bool
+
 	fullURI    []byte
 	requestURI []byte
 
-	h *RequestHeader
+	username []byte
+	password []byte
 }
 
 // CopyTo copies uri contents to dst.
@@ -63,13 +75,15 @@ func (u *URI) CopyTo(dst *URI) {
 	dst.queryString = append(dst.queryString[:0], u.queryString...)
 	dst.hash = append(dst.hash[:0], u.hash...)
 	dst.host = append(dst.host[:0], u.host...)
+	dst.username = append(dst.username[:0], u.username...)
+	dst.password = append(dst.password[:0], u.password...)
 
 	u.queryArgs.CopyTo(&dst.queryArgs)
 	dst.parsedQueryArgs = u.parsedQueryArgs
+	dst.DisablePathNormalizing = u.DisablePathNormalizing
 
 	// fullURI and requestURI shouldn't be copied, since they are created
 	// from scratch on each FullURI() and RequestURI() call.
-	dst.h = u.h
 }
 
 // Hash returns URI hash, i.e. qwe of http://aaa.com/foo/bar?baz=123#qwe .
@@ -87,6 +101,36 @@ func (u *URI) SetHash(hash string) {
 // SetHashBytes sets URI hash.
 func (u *URI) SetHashBytes(hash []byte) {
 	u.hash = append(u.hash[:0], hash...)
+}
+
+// Username returns URI username
+func (u *URI) Username() []byte {
+	return u.username
+}
+
+// SetUsername sets URI username.
+func (u *URI) SetUsername(username string) {
+	u.username = append(u.username[:0], username...)
+}
+
+// SetUsernameBytes sets URI username.
+func (u *URI) SetUsernameBytes(username []byte) {
+	u.username = append(u.username[:0], username...)
+}
+
+// Password returns URI password
+func (u *URI) Password() []byte {
+	return u.password
+}
+
+// SetPassword sets URI password.
+func (u *URI) SetPassword(password string) {
+	u.password = append(u.password[:0], password...)
+}
+
+// SetPasswordBytes sets URI password.
+func (u *URI) SetPasswordBytes(password []byte) {
+	u.password = append(u.password[:0], password...)
 }
 
 // QueryString returns URI query string,
@@ -174,29 +218,25 @@ func (u *URI) Reset() {
 	u.path = u.path[:0]
 	u.queryString = u.queryString[:0]
 	u.hash = u.hash[:0]
+	u.username = u.username[:0]
+	u.password = u.password[:0]
 
 	u.host = u.host[:0]
 	u.queryArgs.Reset()
 	u.parsedQueryArgs = false
+	u.DisablePathNormalizing = false
 
 	// There is no need in u.fullURI = u.fullURI[:0], since full uri
-	// is calucalted on each call to FullURI().
+	// is calculated on each call to FullURI().
 
 	// There is no need in u.requestURI = u.requestURI[:0], since requestURI
 	// is calculated on each call to RequestURI().
-
-	u.h = nil
 }
 
 // Host returns host part, i.e. aaa.com of http://aaa.com/foo/bar?baz=123#qwe .
 //
 // Host is always lowercased.
 func (u *URI) Host() []byte {
-	if len(u.host) == 0 && u.h != nil {
-		u.host = append(u.host[:0], u.h.Host()...)
-		lowercaseBytes(u.host)
-		u.h = nil
-	}
 	return u.host
 }
 
@@ -212,22 +252,52 @@ func (u *URI) SetHostBytes(host []byte) {
 	lowercaseBytes(u.host)
 }
 
+var (
+	ErrorInvalidURI = errors.New("invalid uri")
+)
+
 // Parse initializes URI from the given host and uri.
-func (u *URI) Parse(host, uri []byte) {
-	u.parse(host, uri, nil)
+//
+// host may be nil. In this case uri must contain fully qualified uri,
+// i.e. with scheme and host. http is assumed if scheme is omitted.
+//
+// uri may contain e.g. RequestURI without scheme and host if host is non-empty.
+func (u *URI) Parse(host, uri []byte) error {
+	return u.parse(host, uri, false)
 }
 
-func (u *URI) parseQuick(uri []byte, h *RequestHeader) {
-	u.parse(nil, uri, h)
-}
-
-func (u *URI) parse(host, uri []byte, h *RequestHeader) {
+func (u *URI) parse(host, uri []byte, isTLS bool) error {
 	u.Reset()
-	u.h = h
 
-	scheme, host, uri := splitHostURI(host, uri)
-	u.scheme = append(u.scheme, scheme...)
-	lowercaseBytes(u.scheme)
+	if stringContainsCTLByte(uri) {
+		return ErrorInvalidURI
+	}
+
+	if len(host) == 0 || bytes.Contains(uri, strColonSlashSlash) {
+		scheme, newHost, newURI := splitHostURI(host, uri)
+		u.scheme = append(u.scheme, scheme...)
+		lowercaseBytes(u.scheme)
+		host = newHost
+		uri = newURI
+	}
+
+	if isTLS {
+		u.scheme = append(u.scheme[:0], strHTTPS...)
+	}
+
+	if n := bytes.IndexByte(host, '@'); n >= 0 {
+		auth := host[:n]
+		host = host[n+1:]
+
+		if n := bytes.IndexByte(auth, ':'); n >= 0 {
+			u.username = append(u.username[:0], auth[:n]...)
+			u.password = append(u.password[:0], auth[n+1:]...)
+		} else {
+			u.username = append(u.username[:0], auth...)
+			u.password = u.password[:0]
+		}
+	}
+
 	u.host = append(u.host, host...)
 	lowercaseBytes(u.host)
 
@@ -242,7 +312,7 @@ func (u *URI) parse(host, uri []byte, h *RequestHeader) {
 	if queryIndex < 0 && fragmentIndex < 0 {
 		u.pathOriginal = append(u.pathOriginal, b...)
 		u.path = normalizePath(u.path, u.pathOriginal)
-		return
+		return nil
 	}
 
 	if queryIndex >= 0 {
@@ -256,7 +326,7 @@ func (u *URI) parse(host, uri []byte, h *RequestHeader) {
 			u.queryString = append(u.queryString, b[queryIndex+1:fragmentIndex]...)
 			u.hash = append(u.hash, b[fragmentIndex+1:]...)
 		}
-		return
+		return nil
 	}
 
 	// fragmentIndex >= 0 && queryIndex < 0
@@ -264,12 +334,14 @@ func (u *URI) parse(host, uri []byte, h *RequestHeader) {
 	u.pathOriginal = append(u.pathOriginal, b[:fragmentIndex]...)
 	u.path = normalizePath(u.path, u.pathOriginal)
 	u.hash = append(u.hash, b[fragmentIndex+1:]...)
+
+	return nil
 }
 
 func normalizePath(dst, src []byte) []byte {
 	dst = dst[:0]
 	dst = addLeadingSlash(dst, src)
-	dst = decodeArgAppend(dst, src, false)
+	dst = decodeArgAppendNoPlus(dst, src)
 
 	// remove duplicate slashes
 	b := dst
@@ -286,8 +358,19 @@ func normalizePath(dst, src []byte) []byte {
 	}
 	dst = dst[:bSize]
 
-	// remove /foo/../ parts
+	// remove /./ parts
 	b = dst
+	for {
+		n := bytes.Index(b, strSlashDotSlash)
+		if n < 0 {
+			break
+		}
+		nn := n + len(strSlashDotSlash) - 1
+		copy(b[n:], b[nn:])
+		b = b[:len(b)-nn+n]
+	}
+
+	// remove /foo/../ parts
 	for {
 		n := bytes.Index(b, strSlashDotDotSlash)
 		if n < 0 {
@@ -302,23 +385,12 @@ func normalizePath(dst, src []byte) []byte {
 		b = b[:len(b)-n+nn]
 	}
 
-	// remove /./ parts
-	for {
-		n := bytes.Index(b, strSlashDotSlash)
-		if n < 0 {
-			break
-		}
-		nn := n + len(strSlashDotSlash) - 1
-		copy(b[n:], b[nn:])
-		b = b[:len(b)-nn+n]
-	}
-
 	// remove trailing /foo/..
 	n := bytes.LastIndex(b, strSlashDotDot)
 	if n >= 0 && n+len(strSlashDotDot) == len(b) {
 		nn := bytes.LastIndexByte(b[:n], '/')
 		if nn < 0 {
-			return strSlash
+			return append(dst[:0], strSlash...)
 		}
 		b = b[:nn+1]
 	}
@@ -328,17 +400,18 @@ func normalizePath(dst, src []byte) []byte {
 
 // RequestURI returns RequestURI - i.e. URI without Scheme and Host.
 func (u *URI) RequestURI() []byte {
-	dst := appendQuotedPath(u.requestURI[:0], u.Path())
-	if u.queryArgs.Len() > 0 {
+	var dst []byte
+	if u.DisablePathNormalizing {
+		dst = append(u.requestURI[:0], u.PathOriginal()...)
+	} else {
+		dst = appendQuotedPath(u.requestURI[:0], u.Path())
+	}
+	if u.parsedQueryArgs && u.queryArgs.Len() > 0 {
 		dst = append(dst, '?')
 		dst = u.queryArgs.AppendBytes(dst)
 	} else if len(u.queryString) > 0 {
 		dst = append(dst, '?')
 		dst = append(dst, u.queryString...)
-	}
-	if len(u.hash) > 0 {
-		dst = append(dst, '#')
-		dst = append(dst, u.hash...)
 	}
 	u.requestURI = dst
 	return u.requestURI
@@ -366,13 +439,14 @@ func (u *URI) LastPathSegment() []byte {
 //
 //     * Absolute, i.e. http://foobar.com/aaa/bb?cc . In this case the original
 //       uri is replaced by newURI.
+//     * Absolute without scheme, i.e. //foobar.com/aaa/bb?cc. In this case
+//       the original scheme is preserved.
 //     * Missing host, i.e. /aaa/bb?cc . In this case only RequestURI part
 //       of the original uri is replaced.
 //     * Relative path, i.e.  xx?yy=abc . In this case the original RequestURI
 //       is updated according to the new relative path.
 func (u *URI) Update(newURI string) {
-	u.fullURI = append(u.fullURI[:0], newURI...)
-	u.UpdateBytes(u.fullURI)
+	u.UpdateBytes(s2b(newURI))
 }
 
 // UpdateBytes updates uri.
@@ -381,6 +455,8 @@ func (u *URI) Update(newURI string) {
 //
 //     * Absolute, i.e. http://foobar.com/aaa/bb?cc . In this case the original
 //       uri is replaced by newURI.
+//     * Absolute without scheme, i.e. //foobar.com/aaa/bb?cc. In this case
+//       the original scheme is preserved.
 //     * Missing host, i.e. /aaa/bb?cc . In this case only RequestURI part
 //       of the original uri is replaced.
 //     * Relative path, i.e.  xx?yy=abc . In this case the original RequestURI
@@ -393,38 +469,59 @@ func (u *URI) updateBytes(newURI, buf []byte) []byte {
 	if len(newURI) == 0 {
 		return buf
 	}
+
+	n := bytes.Index(newURI, strSlashSlash)
+	if n >= 0 {
+		// absolute uri
+		var b [32]byte
+		schemeOriginal := b[:0]
+		if len(u.scheme) > 0 {
+			schemeOriginal = append([]byte(nil), u.scheme...)
+		}
+		if err := u.Parse(nil, newURI); err != nil {
+			return nil
+		}
+		if len(schemeOriginal) > 0 && len(u.scheme) == 0 {
+			u.scheme = append(u.scheme[:0], schemeOriginal...)
+		}
+		return buf
+	}
+
 	if newURI[0] == '/' {
 		// uri without host
 		buf = u.appendSchemeHost(buf[:0])
 		buf = append(buf, newURI...)
-		u.Parse(nil, buf)
-		return buf
-	}
-
-	n := bytes.Index(newURI, strColonSlashSlash)
-	if n >= 0 {
-		// absolute uri
-		u.Parse(nil, newURI)
+		if err := u.Parse(nil, buf); err != nil {
+			return nil
+		}
 		return buf
 	}
 
 	// relative path
-	if newURI[0] == '?' {
+	switch newURI[0] {
+	case '?':
 		// query string only update
 		u.SetQueryStringBytes(newURI[1:])
+		return append(buf[:0], u.FullURI()...)
+	case '#':
+		// update only hash
+		u.SetHashBytes(newURI[1:])
+		return append(buf[:0], u.FullURI()...)
+	default:
+		// update the last path part after the slash
+		path := u.Path()
+		n = bytes.LastIndexByte(path, '/')
+		if n < 0 {
+			panic(fmt.Sprintf("BUG: path must contain at least one slash: %s %s", u.Path(), newURI))
+		}
+		buf = u.appendSchemeHost(buf[:0])
+		buf = appendQuotedPath(buf, path[:n+1])
+		buf = append(buf, newURI...)
+		if err := u.Parse(nil, buf); err != nil {
+			return nil
+		}
 		return buf
 	}
-
-	path := u.Path()
-	n = bytes.LastIndexByte(path, '/')
-	if n < 0 {
-		panic("BUG: path must contain at least one slash")
-	}
-	buf = u.appendSchemeHost(buf[:0])
-	buf = appendQuotedPath(buf, path[:n+1])
-	buf = append(buf, newURI...)
-	u.Parse(nil, buf)
-	return buf
 }
 
 // FullURI returns full uri in the form {Scheme}://{Host}{RequestURI}#{Hash}.
@@ -436,7 +533,12 @@ func (u *URI) FullURI() []byte {
 // AppendBytes appends full uri to dst and returns the extended dst.
 func (u *URI) AppendBytes(dst []byte) []byte {
 	dst = u.appendSchemeHost(dst)
-	return append(dst, u.RequestURI()...)
+	dst = append(dst, u.RequestURI()...)
+	if len(u.hash) > 0 {
+		dst = append(dst, '#')
+		dst = append(dst, u.hash...)
+	}
+	return dst
 }
 
 func (u *URI) appendSchemeHost(dst []byte) []byte {
@@ -459,7 +561,7 @@ func (u *URI) String() string {
 }
 
 func splitHostURI(host, uri []byte) ([]byte, []byte, []byte) {
-	n := bytes.Index(uri, strColonSlashSlash)
+	n := bytes.Index(uri, strSlashSlash)
 	if n < 0 {
 		return strHTTP, host, uri
 	}
@@ -467,10 +569,22 @@ func splitHostURI(host, uri []byte) ([]byte, []byte, []byte) {
 	if bytes.IndexByte(scheme, '/') >= 0 {
 		return strHTTP, host, uri
 	}
-	n += len(strColonSlashSlash)
+	if len(scheme) > 0 && scheme[len(scheme)-1] == ':' {
+		scheme = scheme[:len(scheme)-1]
+	}
+	n += len(strSlashSlash)
 	uri = uri[n:]
 	n = bytes.IndexByte(uri, '/')
-	if n < 0 {
+	nq := bytes.IndexByte(uri, '?')
+	if nq >= 0 && nq < n {
+		// A hack for urls like foobar.com?a=b/xyz
+		n = nq
+	} else if n < 0 {
+		// A hack for bogus urls like foobar.com?a=b without
+		// slash after host.
+		if nq >= 0 {
+			return scheme, uri[:nq], uri[nq:]
+		}
 		return scheme, uri, strSlash
 	}
 	return scheme, uri[:n], uri[n:]
@@ -488,4 +602,15 @@ func (u *URI) parseQueryArgs() {
 	}
 	u.queryArgs.ParseBytes(u.queryString)
 	u.parsedQueryArgs = true
+}
+
+// stringContainsCTLByte reports whether s contains any ASCII control character.
+func stringContainsCTLByte(s []byte) bool {
+	for i := 0; i < len(s); i++ {
+		b := s[i]
+		if b < ' ' || b == 0x7f {
+			return true
+		}
+	}
+	return false
 }

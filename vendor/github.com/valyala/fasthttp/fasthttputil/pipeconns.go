@@ -8,16 +8,20 @@ import (
 	"time"
 )
 
-// NewPipeConns returns new bi-directonal connection pipe.
+// NewPipeConns returns new bi-directional connection pipe.
+//
+// PipeConns is NOT safe for concurrent use by multiple goroutines!
 func NewPipeConns() *PipeConns {
-	ch1 := acquirePipeChan()
-	ch2 := acquirePipeChan()
+	ch1 := make(chan *byteBuffer, 4)
+	ch2 := make(chan *byteBuffer, 4)
 
-	pc := &PipeConns{}
-	pc.c1.r = ch1
-	pc.c1.w = ch2
-	pc.c2.r = ch2
-	pc.c2.w = ch1
+	pc := &PipeConns{
+		stopCh: make(chan struct{}),
+	}
+	pc.c1.rCh = ch1
+	pc.c1.wCh = ch2
+	pc.c2.rCh = ch2
+	pc.c2.wCh = ch1
 	pc.c1.pc = pc
 	pc.c2.pc = pc
 	return pc
@@ -34,9 +38,14 @@ func NewPipeConns() *PipeConns {
 //   * It is faster.
 //   * It buffers Write calls, so there is no need to have concurrent goroutine
 //     calling Read in order to unblock each Write call.
+//   * It supports read and write deadlines.
+//
+// PipeConns is NOT safe for concurrent use by multiple goroutines!
 type PipeConns struct {
-	c1 pipeConn
-	c2 pipeConn
+	c1         pipeConn
+	c2         pipeConn
+	stopCh     chan struct{}
+	stopChLock sync.Mutex
 }
 
 // Conn1 returns the first end of bi-directional pipe.
@@ -55,46 +64,60 @@ func (pc *PipeConns) Conn2() net.Conn {
 	return &pc.c2
 }
 
-func (pc *PipeConns) release() {
-	pc.c1.wlock.Lock()
-	pc.c2.wlock.Lock()
-	mustRelease := pc.c1.wclosed && pc.c2.wclosed
-	pc.c1.wlock.Unlock()
-	pc.c2.wlock.Unlock()
-
-	if mustRelease {
-		pc.c1.release()
-		pc.c2.release()
+// Close closes pipe connections.
+func (pc *PipeConns) Close() error {
+	pc.stopChLock.Lock()
+	select {
+	case <-pc.stopCh:
+	default:
+		close(pc.stopCh)
 	}
+	pc.stopChLock.Unlock()
+
+	return nil
 }
 
 type pipeConn struct {
-	r  *pipeChan
-	w  *pipeChan
 	b  *byteBuffer
 	bb []byte
 
-	rlock   sync.Mutex
-	rclosed bool
+	rCh chan *byteBuffer
+	wCh chan *byteBuffer
+	pc  *PipeConns
 
-	wlock   sync.Mutex
-	wclosed bool
+	readDeadlineTimer  *time.Timer
+	writeDeadlineTimer *time.Timer
 
-	pc *PipeConns
+	readDeadlineCh  <-chan time.Time
+	writeDeadlineCh <-chan time.Time
+
+	readDeadlineChLock sync.Mutex
 }
 
 func (c *pipeConn) Write(p []byte) (int, error) {
 	b := acquireByteBuffer()
 	b.b = append(b.b[:0], p...)
 
-	c.wlock.Lock()
-	if c.wclosed {
-		c.wlock.Unlock()
+	select {
+	case <-c.pc.stopCh:
 		releaseByteBuffer(b)
 		return 0, errConnectionClosed
+	default:
 	}
-	c.w.ch <- b
-	c.wlock.Unlock()
+
+	select {
+	case c.wCh <- b:
+	default:
+		select {
+		case c.wCh <- b:
+		case <-c.writeDeadlineCh:
+			c.writeDeadlineCh = closedDeadlineCh
+			return 0, ErrTimeout
+		case <-c.pc.stopCh:
+			releaseByteBuffer(b)
+			return 0, errConnectionClosed
+		}
+	}
 
 	return len(p), nil
 }
@@ -120,34 +143,9 @@ func (c *pipeConn) Read(p []byte) (int, error) {
 
 func (c *pipeConn) read(p []byte, mayBlock bool) (int, error) {
 	if len(c.bb) == 0 {
-		c.rlock.Lock()
-
-		releaseByteBuffer(c.b)
-		c.b = nil
-
-		if c.rclosed {
-			c.rlock.Unlock()
-			return 0, io.EOF
+		if err := c.readNextByteBuffer(mayBlock); err != nil {
+			return 0, err
 		}
-
-		if mayBlock {
-			c.b = <-c.r.ch
-		} else {
-			select {
-			case c.b = <-c.r.ch:
-			default:
-				c.rlock.Unlock()
-				return 0, errWouldBlock
-			}
-		}
-
-		if c.b == nil {
-			c.rclosed = true
-			c.rlock.Unlock()
-			return 0, io.EOF
-		}
-		c.bb = c.b.b
-		c.rlock.Unlock()
 	}
 	n := copy(p, c.bb)
 	c.bb = c.bb[n:]
@@ -155,49 +153,74 @@ func (c *pipeConn) read(p []byte, mayBlock bool) (int, error) {
 	return n, nil
 }
 
-var (
-	errWouldBlock       = errors.New("would block")
-	errConnectionClosed = errors.New("connection closed")
-	errNoDeadlines      = errors.New("deadline not supported")
-)
-
-func (c *pipeConn) Close() error {
-	c.wlock.Lock()
-	if c.wclosed {
-		c.wlock.Unlock()
-		return errConnectionClosed
-	}
-
-	c.wclosed = true
-	c.w.ch <- nil
-	c.wlock.Unlock()
-
-	c.pc.release()
-	return nil
-}
-
-func (c *pipeConn) release() {
-	c.rlock.Lock()
-
+func (c *pipeConn) readNextByteBuffer(mayBlock bool) error {
 	releaseByteBuffer(c.b)
 	c.b = nil
 
-	if !c.rclosed {
-		c.rclosed = true
-		for b := range c.r.ch {
-			releaseByteBuffer(b)
-			if b == nil {
-				break
+	select {
+	case c.b = <-c.rCh:
+	default:
+		if !mayBlock {
+			return errWouldBlock
+		}
+		c.readDeadlineChLock.Lock()
+		readDeadlineCh := c.readDeadlineCh
+		c.readDeadlineChLock.Unlock()
+		select {
+		case c.b = <-c.rCh:
+		case <-readDeadlineCh:
+			c.readDeadlineChLock.Lock()
+			c.readDeadlineCh = closedDeadlineCh
+			c.readDeadlineChLock.Unlock()
+			// rCh may contain data when deadline is reached.
+			// Read the data before returning ErrTimeout.
+			select {
+			case c.b = <-c.rCh:
+			default:
+				return ErrTimeout
+			}
+		case <-c.pc.stopCh:
+			// rCh may contain data when stopCh is closed.
+			// Read the data before returning EOF.
+			select {
+			case c.b = <-c.rCh:
+			default:
+				return io.EOF
 			}
 		}
 	}
-	if c.r != nil {
-		releasePipeChan(c.r)
-		c.r = nil
-		c.w = nil
-	}
 
-	c.rlock.Unlock()
+	c.bb = c.b.b
+	return nil
+}
+
+var (
+	errWouldBlock       = errors.New("would block")
+	errConnectionClosed = errors.New("connection closed")
+)
+
+type timeoutError struct {
+}
+
+func (e *timeoutError) Error() string {
+	return "timeout"
+}
+
+// Only implement the Timeout() function of the net.Error interface.
+// This allows for checks like:
+//
+//   if x, ok := err.(interface{ Timeout() bool }); ok && x.Timeout() {
+func (e *timeoutError) Timeout() bool {
+	return true
+}
+
+var (
+	// ErrTimeout is returned from Read() or Write() on timeout.
+	ErrTimeout = &timeoutError{}
+)
+
+func (c *pipeConn) Close() error {
+	return c.pc.Close()
 }
 
 func (c *pipeConn) LocalAddr() net.Addr {
@@ -208,17 +231,54 @@ func (c *pipeConn) RemoteAddr() net.Addr {
 	return pipeAddr(0)
 }
 
-func (c *pipeConn) SetDeadline(t time.Time) error {
-	return errNoDeadlines
+func (c *pipeConn) SetDeadline(deadline time.Time) error {
+	c.SetReadDeadline(deadline)  //nolint:errcheck
+	c.SetWriteDeadline(deadline) //nolint:errcheck
+	return nil
 }
 
-func (c *pipeConn) SetReadDeadline(t time.Time) error {
-	return c.SetDeadline(t)
+func (c *pipeConn) SetReadDeadline(deadline time.Time) error {
+	if c.readDeadlineTimer == nil {
+		c.readDeadlineTimer = time.NewTimer(time.Hour)
+	}
+	readDeadlineCh := updateTimer(c.readDeadlineTimer, deadline)
+	c.readDeadlineChLock.Lock()
+	c.readDeadlineCh = readDeadlineCh
+	c.readDeadlineChLock.Unlock()
+	return nil
 }
 
-func (c *pipeConn) SetWriteDeadline(t time.Time) error {
-	return c.SetDeadline(t)
+func (c *pipeConn) SetWriteDeadline(deadline time.Time) error {
+	if c.writeDeadlineTimer == nil {
+		c.writeDeadlineTimer = time.NewTimer(time.Hour)
+	}
+	c.writeDeadlineCh = updateTimer(c.writeDeadlineTimer, deadline)
+	return nil
 }
+
+func updateTimer(t *time.Timer, deadline time.Time) <-chan time.Time {
+	if !t.Stop() {
+		select {
+		case <-t.C:
+		default:
+		}
+	}
+	if deadline.IsZero() {
+		return nil
+	}
+	d := -time.Since(deadline)
+	if d <= 0 {
+		return closedDeadlineCh
+	}
+	t.Reset(d)
+	return t.C
+}
+
+var closedDeadlineCh = func() <-chan time.Time {
+	ch := make(chan time.Time)
+	close(ch)
+	return ch
+}()
 
 type pipeAddr int
 
@@ -250,31 +310,4 @@ var byteBufferPool = &sync.Pool{
 			b: make([]byte, 1024),
 		}
 	},
-}
-
-func acquirePipeChan() *pipeChan {
-	ch := pipeChanPool.Get().(*pipeChan)
-	if len(ch.ch) > 0 {
-		panic("BUG: non-empty pipeChan acquired")
-	}
-	return ch
-}
-
-func releasePipeChan(ch *pipeChan) {
-	if len(ch.ch) > 0 {
-		panic("BUG: non-empty pipeChan released")
-	}
-	pipeChanPool.Put(ch)
-}
-
-var pipeChanPool = &sync.Pool{
-	New: func() interface{} {
-		return &pipeChan{
-			ch: make(chan *byteBuffer, 4),
-		}
-	},
-}
-
-type pipeChan struct {
-	ch chan *byteBuffer
 }
