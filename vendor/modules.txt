@@ -1,0 +1,18 @@
+# github.com/andybalholm/brotli v1.0.4
+github.com/andybalholm/brotli
+# github.com/inconshreveable/mousetrap v1.0.0
+github.com/inconshreveable/mousetrap
+# github.com/klauspost/compress v1.15.0
+github.com/klauspost/compress/flate
+github.com/klauspost/compress/gzip
+github.com/klauspost/compress/zlib
+# github.com/spf13/cobra v0.0.0-20160830174925-9c28e4bbd74e
+github.com/spf13/cobra
+# github.com/spf13/pflag v0.0.0-20160911194638-7b17cc4658ef
+github.com/spf13/pflag
+# github.com/valyala/bytebufferpool v1.0.0
+github.com/valyala/bytebufferpool
+# github.com/valyala/fasthttp v1.34.0
+github.com/valyala/fasthttp
+github.com/valyala/fasthttp/fasthttputil
+github.com/valyala/fasthttp/stackless
