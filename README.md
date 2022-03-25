@@ -1,3 +1,6 @@
+This repository has been archived and is no longer maintained. Please see the
+[inch](https://github.com/influxdata/inch) benchmarking tool instead.
+
 # Stress tool
 
 ## Build Instructions
