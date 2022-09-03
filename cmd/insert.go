@@ -31,6 +31,8 @@ var (
 	strict, kapacitorMode                bool
 	recordStats                          bool
 	tlsSkipVerify                        bool
+	readTimeout, writeTimeout            time.Duration
+	printError                           bool
 )
 
 const (
@@ -67,6 +69,12 @@ func insertRun(cmd *cobra.Command, args []string) {
 	if pps < batchSize {
 		batchSize = pps
 		concurrency = 1
+	}
+	if uint64(seriesN) < batchSize {
+		// otherwise, the tool will generate points with identical timestamp
+		fmt.Fprintf(os.Stderr, "series number(%v) should not be smaller than batch size(%v)\n", seriesN, batchSize)
+		os.Exit(1)
+		return
 	}
 	if !quiet {
 		fmt.Printf("Using point template: %s %s <timestamp>\n", seriesKey, fieldStr)
@@ -125,7 +133,7 @@ func insertRun(cmd *cobra.Command, args []string) {
 
 			cfg := stress.WriteConfig{
 				BatchSize: batchSize,
-				MaxPoints: pointsN / concurrency, // divide by concurreny
+				MaxPoints: pointsN / concurrency, // divide by concurrency
 				GzipLevel: gzip,
 				Deadline:  time.Now().Add(runtime),
 				Tick:      tick,
@@ -185,6 +193,9 @@ func init() {
 	insertCmd.Flags().StringVar(&dump, "dump", "", "Dump to given file instead of writing over HTTP")
 	insertCmd.Flags().BoolVarP(&strict, "strict", "", false, "Strict mode will exit as soon as an error or unexpected status is encountered")
 	insertCmd.Flags().BoolVarP(&tlsSkipVerify, "tls-skip-verify", "", false, "Skip verify in for TLS")
+	insertCmd.Flags().DurationVarP(&readTimeout, "read-timeout", "", 0, "read timeout")
+	insertCmd.Flags().DurationVarP(&writeTimeout, "write-timeout", "", 0, "write timeout")
+	insertCmd.Flags().BoolVarP(&printError, "print-error", "", true, "print error to stderr")
 }
 
 func client() write.Client {
@@ -198,6 +209,8 @@ func client() write.Client {
 		Consistency:     consistency,
 		TLSSkipVerify:   tlsSkipVerify,
 		Gzip:            gzip != 0,
+		ReadTimeout:     readTimeout,
+		WriteTimeout:    writeTimeout,
 	}
 
 	if dump != "" {
@@ -251,12 +264,12 @@ func (s *errorSink) checkErrors() {
 
 	const timeFormat = "[2006-01-02 15:04:05]"
 	for r := range s.Ch {
-		if r.Err != nil {
+		if r.Err != nil && printError {
 			fmt.Fprintln(os.Stderr, time.Now().Format(timeFormat), "Error sending write:", r.Err.Error())
 			continue
 		}
 
-		if r.StatusCode != 204 {
+		if r.StatusCode != 204 && printError {
 			fmt.Fprintln(os.Stderr, time.Now().Format(timeFormat), "Unexpected write: status", r.StatusCode, ", body:", r.Body)
 		}
 
@@ -379,9 +392,10 @@ func (s *influxDBSink) run() {
 		case result := <-s.Ch:
 			// Add to batch
 			if result.Err != nil {
-				continue
+				s.buf.WriteString(fmt.Sprintf("err,status=%v latNs=%v %v\n", result.StatusCode, result.LatNs, result.Timestamp))
+			} else {
+				s.buf.WriteString(fmt.Sprintf("req,status=%v latNs=%v %v\n", result.StatusCode, result.LatNs, result.Timestamp))
 			}
-			s.buf.WriteString(fmt.Sprintf("req,status=%v latNs=%v %v\n", result.StatusCode, result.LatNs, result.Timestamp))
 		}
 	}
 }
